@@ -94,7 +94,7 @@ public enum Resolver {
                 let dayOnly = startIsDate ? String(startText.prefix(10)) : String(startText.split(separator: " ")[0])
                 throw CalUtilError("an all-day event takes a day without a time, e.g. --start \(dayOnly)")
             }
-            start = try DateParsing.makeDate(startInput, time: TimeOfDay(hour: 0, minute: 0), defaultTimeZone: timeZone)
+            start = try DateParsing.startOfDay(year: startInput.year, month: startInput.month, day: startInput.day, timeZone: timeZone)
         } else {
             var time = startInput.time
             if time == nil, let templateTime = nonEmpty(t?.time) {
@@ -105,9 +105,13 @@ public enum Resolver {
                 throw CalUtilError("--start needs a time, e.g. \(example) (or add --all-day)")
             }
             start = try DateParsing.makeDate(startInput, time: time, defaultTimeZone: timeZone)
-            // An offset typed in --start (Z, +11:00) is the event's zone unless --timezone says
-            // otherwise, so a bare --end time and HH:MM alarms are read in it too.
-            if zone.value == nil, let offset = startInput.utcOffset, let fixed = TimeZone(secondsFromGMT: offset) {
+            // An offset typed in --start (Z, +11:00) decides the zone a bare --end time and HH:MM
+            // alarms are read in, unless --timezone names one. When it is this Mac's own offset
+            // at that moment, the Mac's named zone is kept, so the event follows its
+            // daylight-saving rules; otherwise the event gets the fixed offset.
+            if zone.value == nil, let offset = startInput.utcOffset,
+               localTimeZone.secondsFromGMT(for: start) != offset,
+               let fixed = TimeZone(secondsFromGMT: offset) {
                 timeZone = fixed
             }
         }
@@ -121,8 +125,9 @@ public enum Resolver {
         if let endText = nonEmpty(o.end) {
             end = try resolveEnd(endText, start: start, isAllDay: isAllDay, calendar: calendar, now: now)
         } else {
-            // A timed template's duration doesn't fit an event made all-day with --all-day.
-            let templateDuration = o.end != nil || (isAllDay && t?.allDay != true) ? nil : t?.duration
+            // A template's duration only fits the kind of event it describes: a timed "2h30m"
+            // doesn't suit --all-day, nor an all-day "3d" --no-all-day.
+            let templateDuration = o.end != nil || isAllDay != (t?.allDay ?? false) ? nil : t?.duration
             let duration = pick(o.duration, templateDuration)
             let seconds = try inTemplate(duration.fromTemplate) {
                 try duration.value.map(Durations.parse)
@@ -137,7 +142,7 @@ public enum Resolver {
                 } else {
                     days = 1
                 }
-                end = calendar.date(byAdding: .day, value: days, to: start)!
+                end = DateParsing.startOfDay(days, after: start, calendar: calendar)
             } else {
                 end = start.addingTimeInterval(TimeInterval(seconds ?? 3_600))
             }
@@ -224,9 +229,9 @@ public enum Resolver {
             guard input.time == nil else {
                 throw CalUtilError("for an all-day event, --end is the last day, e.g. --end 2026-11-08")
             }
-            let lastDay = try DateParsing.makeDate(input, time: TimeOfDay(hour: 0, minute: 0),
-                                                   defaultTimeZone: calendar.timeZone)
-            return calendar.date(byAdding: .day, value: 1, to: lastDay)!
+            let lastDay = try DateParsing.startOfDay(year: input.year, month: input.month, day: input.day,
+                                                     timeZone: calendar.timeZone)
+            return DateParsing.startOfDay(1, after: lastDay, calendar: calendar)
         }
         guard let time = try? DateParsing.parseTime(text) else {
             let input = try DateParsing.parseDateTime(text, now: now, timeZone: calendar.timeZone)

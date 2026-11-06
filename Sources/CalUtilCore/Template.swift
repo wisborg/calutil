@@ -32,8 +32,13 @@ public struct Template: Equatable, Sendable {
         self.alarms = alarms
     }
 
-    static let stringKeys = ["title", "location", "notes", "url", "calendar", "timezone", "time", "duration"]
-    static let allKeys = stringKeys + ["allDay", "alarms"]
+    /// The text settings, in the order they are documented. Parsing, the list of known
+    /// settings and `--json` all come from this table.
+    nonisolated(unsafe) static let stringFields: [(key: String, path: WritableKeyPath<Template, String?>)] = [
+        ("title", \.title), ("location", \.location), ("notes", \.notes), ("url", \.url),
+        ("calendar", \.calendar), ("timezone", \.timezone), ("time", \.time), ("duration", \.duration),
+    ]
+    static let allKeys = stringFields.map(\.key) + ["allDay", "alarms"]
 }
 
 public enum TemplateStore {
@@ -54,11 +59,9 @@ public enum TemplateStore {
         var object: [String: Any] = [:]
         for (name, t) in templates {
             var fields: [String: Any] = [:]
-            let strings: [(String, String?)] = [
-                ("title", t.title), ("location", t.location), ("notes", t.notes), ("url", t.url),
-                ("calendar", t.calendar), ("timezone", t.timezone), ("time", t.time), ("duration", t.duration),
-            ]
-            for case let (key, value?) in strings { fields[key] = value }
+            for field in Template.stringFields {
+                if let value = t[keyPath: field.path] { fields[field.key] = value }
+            }
             if let allDay = t.allDay { fields["allDay"] = allDay }
             if let alarms = t.alarms { fields["alarms"] = alarms }
             object[name] = fields
@@ -101,21 +104,14 @@ public enum TemplateStore {
             }
             var template = Template(name: name)
             for (key, value) in fields {
-                switch key {
-                case _ where Template.stringKeys.contains(key):
+                if let field = Template.stringFields.first(where: { $0.key == key }) {
                     guard let text = value as? String else {
                         throw CalUtilError("\(where_): \"\(key)\" must be a string")
                     }
-                    switch key {
-                    case "title": template.title = text
-                    case "location": template.location = text
-                    case "notes": template.notes = text
-                    case "url": template.url = text
-                    case "calendar": template.calendar = text
-                    case "timezone": template.timezone = text
-                    case "time": template.time = text
-                    default: template.duration = text
-                    }
+                    template[keyPath: field.path] = text
+                    continue
+                }
+                switch key {
                 case "allDay":
                     guard let number = value as? NSNumber, CFGetTypeID(number) == CFBooleanGetTypeID() else {
                         throw CalUtilError("\(where_): \"allDay\" must be true or false")

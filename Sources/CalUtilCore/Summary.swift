@@ -42,7 +42,7 @@ public enum Summary {
             }
             let whatWidth = described.map(\.what.count).max() ?? 0
             for (index, alarm) in described.enumerated() {
-                let text = alarm.what.padding(toLength: whatWidth, withPad: " ", startingAt: 0) + "  " + alarm.fires
+                let text = alarm.what.padded(to: whatWidth) + "  " + alarm.fires
                 rows.append((index == 0 ? (described.count == 1 ? "Alarm" : "Alarms") : "", text))
             }
         }
@@ -57,7 +57,7 @@ public enum Summary {
 
         let width = rows.map(\.label.count).max() ?? 0
         return rows.map { row in
-            row.label.padding(toLength: width, withPad: " ", startingAt: 0) + "  " + row.value
+            row.label.padded(to: width) + "  " + row.value
         }.joined(separator: "\n")
     }
 

@@ -85,15 +85,13 @@ enum EventKitBackend {
         let duplicated = Set(Dictionary(grouping: calendars, by: qualifiedName).filter { $1.count > 1 }.keys)
         let width = calendars.map { qualifiedName($0).count }.max() ?? 0
         var lines = calendars.map { calendar in
-            var notes: [String] = []
-            if calendar.calendarIdentifier == defaultID { notes.append("default") }
-            if !calendar.allowsContentModifications { notes.append("read-only") }
+            var notes = flags(calendar, isDefault: calendar.calendarIdentifier == defaultID)
             let name = qualifiedName(calendar)
             if duplicated.contains(name) {
                 if let color = hexColor(calendar) { notes.append(color) }
                 notes.append("id \(calendar.calendarIdentifier)")
             }
-            return notes.isEmpty ? name : name.padding(toLength: width, withPad: " ", startingAt: 0) + "  (" + notes.joined(separator: ", ") + ")"
+            return notes.isEmpty ? name : name.padded(to: width) + "  (" + notes.joined(separator: ", ") + ")"
         }
         if !duplicated.isEmpty {
             lines.append("\nSome names are used more than once; pick one of those with --calendar <id>.")
@@ -105,10 +103,7 @@ enum EventKitBackend {
     /// A block of details about one calendar, including its most recent and next events,
     /// so calendars with the same name can be told apart.
     static func describe(_ calendar: EKCalendar, isDefault: Bool, in store: EKEventStore) -> String {
-        var flags: [String] = []
-        if isDefault { flags.append("default") }
-        if !calendar.allowsContentModifications { flags.append("read-only") }
-        if calendar.isSubscribed { flags.append("subscribed") }
+        var flags = flags(calendar, isDefault: isDefault)
         if let color = hexColor(calendar) { flags.append(color) }
 
         let now = Date()
@@ -138,7 +133,7 @@ enum EventKitBackend {
 
         let width = rows.map(\.0.count).max() ?? 0
         let header = qualifiedName(calendar) + (flags.isEmpty ? "" : "  (" + flags.joined(separator: ", ") + ")")
-        return ([header] + rows.map { "  " + $0.0.padding(toLength: width, withPad: " ", startingAt: 0) + "  " + $0.1 })
+        return ([header] + rows.map { "  " + $0.0.padded(to: width) + "  " + $0.1 })
             .joined(separator: "\n")
     }
 
@@ -151,6 +146,15 @@ enum EventKitBackend {
         case .birthday: "birthdays"
         @unknown default: "other"
         }
+    }
+
+    /// "default", "read-only", "subscribed": the same in the plain and verbose listings.
+    static func flags(_ calendar: EKCalendar, isDefault: Bool) -> [String] {
+        var flags: [String] = []
+        if isDefault { flags.append("default") }
+        if !calendar.allowsContentModifications { flags.append("read-only") }
+        if calendar.isSubscribed { flags.append("subscribed") }
+        return flags
     }
 
     /// The calendar's colour as #RRGGBB, to help tell same-named calendars apart.
@@ -241,11 +245,8 @@ enum EventKitBackend {
         let now = Date()
         // Check the input before asking for Calendar access.
         let day = try DateParsing.parseDay(options.day ?? "today", now: now, timeZone: zone)
-        // Noon, then back to the start of the day: midnight itself can be skipped by DST.
-        let noon = try DateParsing.makeDate(year: day.year, month: day.month, day: day.day,
-                                            time: TimeOfDay(hour: 12, minute: 0), timeZone: zone)
-        let first = calendar.startOfDay(for: noon)
-        let end = calendar.date(byAdding: .day, value: options.days, to: first)!
+        let first = try DateParsing.startOfDay(year: day.year, month: day.month, day: day.day, timeZone: zone)
+        let end = DateParsing.startOfDay(options.days, after: first, calendar: calendar)
 
         let store = try authorizedStore()
         let calendars = options.calendars.isEmpty ? nil : try calendarsToRead(options.calendars, in: store)

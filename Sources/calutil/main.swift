@@ -30,10 +30,23 @@ func listTemplates(_ path: String?) throws -> String {
     return lines.joined(separator: "\n")
 }
 
+/// Removes files left by earlier runs. This run's file can't be removed when we're done:
+/// Calendar's import dialog is still reading it after `open` returns.
+func removeOldFiles(in directory: URL, olderThan seconds: TimeInterval) {
+    let files = (try? FileManager.default.contentsOfDirectory(
+        at: directory, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+    let cutoff = Date().addingTimeInterval(-seconds)
+    for file in files where file.pathExtension == "ics" {
+        let modified = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+        if let modified, modified < cutoff { try? FileManager.default.removeItem(at: file) }
+    }
+}
+
 /// Writes the .ics to a temporary file and hands it to Calendar, which shows its import dialog.
 func openInCalendar(_ spec: EventSpec) throws -> URL {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent("calutil", isDirectory: true)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    removeOldFiles(in: directory, olderThan: 86_400)
     let slug = spec.title.lowercased().map { $0.isLetter || $0.isNumber ? String($0) : "-" }.joined()
         .split(separator: "-").joined(separator: "-").prefix(40)
     let file = directory.appendingPathComponent("\(slug.isEmpty ? "event" : String(slug))-\(UUID().uuidString.prefix(8)).ics")

@@ -58,22 +58,30 @@ public enum EventList {
             return event
         }
 
+        // One pass over the days: events sorted by start once, and a running list of the ones
+        // that have started and not yet ended.
+        let byStart = events.sorted { a, b in
+            if a.start != b.start { return a.start < b.start }
+            return a.title.localizedCaseInsensitiveCompare(b.title) == .orderedAscending
+        }
+        var next = 0
+        var active: [ListedEvent] = []
         var sections: [(day: Date, dayEnd: Date, events: [ListedEvent])] = []
         for offset in 0..<days {
-            let day = calendar.date(byAdding: .day, value: offset, to: firstDay)!
-            let dayEnd = calendar.date(byAdding: .day, value: 1, to: day)!
-            let onDay = events
-                .filter { $0.start < dayEnd && max($0.end, $0.start.addingTimeInterval(1)) > day }
-                .sorted { a, b in
-                    if a.isAllDay != b.isAllDay { return a.isAllDay }
-                    if a.start != b.start { return a.start < b.start }
-                    return a.title.localizedCaseInsensitiveCompare(b.title) == .orderedAscending
-                }
+            let day = DateParsing.startOfDay(offset, after: firstDay, calendar: calendar)
+            let dayEnd = DateParsing.startOfDay(1, after: day, calendar: calendar)
+            while next < byStart.count, byStart[next].start < dayEnd {
+                active.append(byStart[next])
+                next += 1
+            }
+            // A zero-length event still belongs to the day it is on.
+            active.removeAll { max($0.end, $0.start.addingTimeInterval(1)) <= day }
+            let onDay = active.filter(\.isAllDay) + active.filter { !$0.isAllDay }
             if !onDay.isEmpty || days == 1 { sections.append((day, dayEnd, onDay)) }
         }
 
         guard !sections.isEmpty else {
-            let lastDay = calendar.date(byAdding: .day, value: days - 1, to: firstDay)!
+            let lastDay = DateParsing.startOfDay(days - 1, after: firstDay, calendar: calendar)
             return "No events from \(Summary.format(firstDay, zone, time: false)) to \(Summary.format(lastDay, zone, time: false))."
         }
 
@@ -95,13 +103,13 @@ public enum EventList {
                 var extras: [String] = []
                 if !event.isAllDay, let own = event.timeZone,
                    own.secondsFromGMT(for: event.start) != zone.secondsFromGMT(for: event.start) {
-                    extras.append("(\(clock(event.start, own)) \(own.identifier))")
+                    extras.append("(\(clock(event.start, DateParsing.gregorian(own))) \(own.identifier))")
                 }
                 if !event.alarms.isEmpty {
-                    extras.append("⏰ " + event.alarms.map { describe($0, event: event, zone: zone) }.joined(separator: ", "))
+                    extras.append("⏰ " + event.alarms.map { describe($0, event: event, calendar: calendar) }.joined(separator: ", "))
                 }
                 let columns = [
-                    pad(timeRange(event, day: section.day, dayEnd: section.dayEnd, zone: zone), timeWidth),
+                    pad(timeRange(event, day: section.day, dayEnd: section.dayEnd, calendar: calendar), timeWidth),
                     pad(shorten(event.title, to: titleWidth), titleWidth),
                     extras.isEmpty ? event.calendar : pad(event.calendar, calendarWidth),
                 ] + extras
@@ -135,30 +143,29 @@ public enum EventList {
     }
 
     /// "18:00–21:00", "all day", "22:00–…" (continues), "…–01:30" (started earlier).
-    static func timeRange(_ event: ListedEvent, day: Date, dayEnd: Date, zone: TimeZone) -> String {
+    static func timeRange(_ event: ListedEvent, day: Date, dayEnd: Date, calendar: Calendar) -> String {
         if event.isAllDay { return "all day" }
-        if event.start == event.end { return clock(event.start, zone) }
-        let from = event.start < day ? "…" : clock(event.start, zone)
-        let to = event.end > dayEnd ? "…" : clock(event.end, zone)
+        if event.start == event.end { return clock(event.start, calendar) }
+        let from = event.start < day ? "…" : clock(event.start, calendar)
+        let to = event.end > dayEnd ? "…" : clock(event.end, calendar)
         return "\(from)–\(to)"
     }
 
     /// Compact alarm text: "1d", "2h30m", "at start", "15m after", "at 09:00".
-    static func describe(_ alarm: Alarm, event: ListedEvent, zone: TimeZone) -> String {
+    static func describe(_ alarm: Alarm, event: ListedEvent, calendar: Calendar) -> String {
         switch alarm {
         case .beforeStart(0): return "at start"
         case .beforeStart(let seconds) where seconds > 0: return Durations.compact(seconds)
         case .beforeStart(let seconds): return Durations.compact(-seconds) + " after"
         case .at(let date):
-            let calendar = DateParsing.gregorian(zone)
             return calendar.isDate(date, inSameDayAs: event.start)
-                ? "at \(clock(date, zone))"
-                : "at \(Summary.format(date, zone))"
+                ? "at \(clock(date, calendar))"
+                : "at \(Summary.format(date, calendar.timeZone))"
         }
     }
 
-    static func clock(_ date: Date, _ zone: TimeZone) -> String {
-        let c = DateParsing.gregorian(zone).dateComponents([.hour, .minute], from: date)
+    static func clock(_ date: Date, _ calendar: Calendar) -> String {
+        let c = calendar.dateComponents([.hour, .minute], from: date)
         return String(format: "%02d:%02d", c.hour!, c.minute!)
     }
 
@@ -166,12 +173,15 @@ public enum EventList {
         text.count <= width ? text : String(text.prefix(width - 1)) + "…"
     }
 
-    static func pad(_ text: String, _ width: Int) -> String {
-        text.count >= width ? text : text.padding(toLength: width, withPad: " ", startingAt: 0)
-    }
+    static func pad(_ text: String, _ width: Int) -> String { text.padded(to: width) }
 }
 
 extension String {
+    /// The text with spaces added to make it `width` characters (never cut short).
+    public func padded(to width: Int) -> String {
+        count >= width ? self : padding(toLength: width, withPad: " ", startingAt: 0)
+    }
+
     func trimmingTrailingSpaces() -> String {
         var text = self
         while text.hasSuffix(" ") { text.removeLast() }

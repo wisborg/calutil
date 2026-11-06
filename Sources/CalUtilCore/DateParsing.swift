@@ -137,6 +137,19 @@ public enum DateParsing {
         return date
     }
 
+    /// The first moment of a day. Usually midnight, but in zones where daylight saving
+    /// skips midnight (America/Santiago, America/Havana) it is 01:00, so this goes via noon.
+    public static func startOfDay(year: Int, month: Int, day: Int, timeZone: TimeZone) throws -> Date {
+        let noon = try makeDate(year: year, month: month, day: day, time: TimeOfDay(hour: 12, minute: 0), timeZone: timeZone)
+        return gregorian(timeZone).startOfDay(for: noon)
+    }
+
+    /// The start of the day `days` days after the one `dayStart` is in. Adding days keeps the
+    /// clock time, which is wrong next to a day that starts at 01:00, so snap to the start.
+    public static func startOfDay(_ days: Int, after dayStart: Date, calendar: Calendar) -> Date {
+        calendar.startOfDay(for: calendar.date(byAdding: .day, value: days, to: dayStart)!)
+    }
+
     public static func makeDate(_ input: DateTimeInput, time: TimeOfDay, defaultTimeZone: TimeZone) throws -> Date {
         let zone = input.utcOffset.flatMap { TimeZone(secondsFromGMT: $0) } ?? defaultTimeZone
         return try makeDate(year: input.year, month: input.month, day: input.day, time: time, timeZone: zone)

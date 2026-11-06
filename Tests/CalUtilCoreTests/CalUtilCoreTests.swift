@@ -586,3 +586,87 @@ let concert = Template(name: "concert", notes: "Bring tickets", calendar: "Perso
         #expect(CalUtilCore.trimmedNonEmpty(nil) == nil)
     }
 }
+
+/// Regression tests for the second whole-repo review.
+@Suite struct ReviewFindingTests2 {
+    let santiago = TimeZone(identifier: "America/Santiago")!
+
+    @Test func allDayWhereDSTSkipsMidnight() throws {
+        // Chile's clocks jump from 00:00 to 01:00 on 6 Sep 2026: that day starts at 01:00.
+        #expect(throws: CalUtilError.self) {
+            try DateParsing.makeDate(year: 2026, month: 9, day: 6, time: TimeOfDay(hour: 0, minute: 0), timeZone: santiago)
+        }
+        let dayStart = try DateParsing.startOfDay(year: 2026, month: 9, day: 6, timeZone: santiago)
+        #expect(DateParsing.gregorian(santiago).component(.hour, from: dayStart) == 1)
+
+        let one = try resolve(["--title", "x", "--start", "2026-09-06", "--all-day"], local: santiago)
+        #expect(one.start == dayStart)
+        let span = try resolve(["--title", "x", "--start", "2026-09-05", "--end", "2026-09-06", "--all-day"], local: santiago)
+        // Ends at the start of 7 Sep, which is midnight again, not 01:00.
+        #expect(span.end == utc("2026-09-07T03:00:00Z"))
+        let three = try resolve(["--title", "x", "--start", "2026-09-05", "--duration", "3d", "--all-day"], local: santiago)
+        #expect(three.end == utc("2026-09-08T03:00:00Z"))
+        // The list's day boundaries snap the same way.
+        let event = ListedEvent(title: "Late", calendar: "Home", calendarFullName: "iCloud/Home",
+                                start: utc("2026-09-07T03:30:00Z"), end: utc("2026-09-07T04:00:00Z"))  // 7 Sep 00:30
+        let text = EventList.render([event], from: dayStart, days: 2, timeZone: santiago, now: now, verbose: false)
+        #expect(text.hasPrefix("Mon 7 Sep 2026\n  00:30–01:00"))
+    }
+
+    @Test func noAllDayIgnoresAnAllDayTemplatesDuration() throws {
+        let trip = Template(name: "trip", duration: "3d", allDay: true)
+        let e = try resolve(["--title", "x", "--start", "2026-11-20T09:00", "--no-all-day"], template: trip)
+        #expect(!e.isAllDay)
+        #expect(e.end.timeIntervalSince(e.start) == 3_600)
+    }
+
+    @Test func offsetMatchingTheMacKeepsItsNamedZone() throws {
+        let sydneyMac = try resolve(["--title", "x", "--start", "2026-11-06T18:00+11:00"], local: sydney)
+        #expect(sydneyMac.timeZone == sydney)
+        let copenhagenMac = try resolve(["--title", "x", "--start", "2026-11-06T18:00+01:00", "--end", "21:00"])
+        #expect(copenhagenMac.timeZone == copenhagen)
+        #expect(copenhagenMac.end == utc("2026-11-06T20:00:00Z"))
+        // A different offset still gets a fixed zone (see offsetInStartIsTheEventsZone).
+        let other = try resolve(["--title", "x", "--start", "2026-11-06T18:00+11:00"])
+        #expect(other.timeZone.identifier == "GMT+1100")
+    }
+
+    @Test func messagesNameTheOptionAsTyped() {
+        func message(_ body: () throws -> Any) -> String {
+            do { _ = try body(); return "" } catch { return (error as? CalUtilError)?.message ?? "" }
+        }
+        #expect(message { try Invocation.parse(["list", "--tz", "Europe/Paris"]) }.contains("unknown option --tz for 'calutil list'"))
+        #expect(message { try AddOptions.parse(["--tz"]) } == "--tz needs a value")
+        #expect(message { try AddOptions.parse(["--tz", "UTC", "--timezone", "UTC"]) } == "--timezone / --tz was given more than once")
+        #expect(message { try AddOptions.parse(["--save", "--open"]) } == "--save and --open can't be combined; pick one")
+    }
+
+    @Test func emptyTemplateMeansNone() throws {
+        #expect(try AddOptions.parse(["--template", ""]).template == nil)
+        #expect(try AddOptions.parse(["--template", " concert "]).template == "concert")
+    }
+
+    @Test func everyTemplateSettingRoundTrips() throws {
+        let all = Template(name: "all", title: "T", location: "L", notes: "N", url: "https://u.example",
+                           calendar: "C", timezone: "UTC", time: "19:30", duration: "2h", allDay: false, alarms: ["1d"])
+        #expect(try TemplateStore.parse(Data(TemplateStore.json(["all": all]).utf8), source: "test") == ["all": all])
+        #expect(Template.allKeys == ["title", "location", "notes", "url", "calendar", "timezone", "time", "duration", "allDay", "alarms"])
+    }
+
+    @Test func zeroLengthAndLongEventsInTheSinglePass() {
+        let monday = utc("2026-11-01T23:00:00Z")
+        let at = ListedEvent(title: "Ping", calendar: "Home", calendarFullName: "iCloud/Home",
+                             start: utc("2026-11-03T08:00:00Z"), end: utc("2026-11-03T08:00:00Z"))
+        let trip = ListedEvent(title: "Trip", calendar: "Home", calendarFullName: "iCloud/Home",
+                               start: utc("2026-10-31T23:00:00Z"), end: utc("2026-11-03T22:59:59Z"), isAllDay: true)
+        let text = EventList.render([at, trip], from: monday, days: 3, timeZone: copenhagen, now: now, verbose: false)
+        #expect(text == """
+        Mon 2 Nov 2026 (tomorrow)
+          all day      Trip  Home
+
+        Tue 3 Nov 2026
+          all day      Trip  Home
+          09:00        Ping  Home
+        """)
+    }
+}

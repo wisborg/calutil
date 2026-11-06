@@ -149,13 +149,13 @@ public struct AddOptions: Equatable, Sendable {
 
     public static func parse(_ arguments: [String]) throws -> AddOptions {
         var options = AddOptions()
-        var scanner = ArgumentScanner(arguments, command: "add")
+        var scanner = ArgumentScanner(arguments, command: "add", aliases: ["--tz": "--timezone"])
         var actionFlag: String?
 
         func setAction(_ action: Action) throws {
             try scanner.flag()
             if let previous = actionFlag, previous != scanner.name {
-                throw CalUtilError("\(previous) and \(scanner.name) can't be combined; pick one", usage: true)
+                throw CalUtilError("\(previous) and \(scanner.typed) can't be combined; pick one", usage: true)
             }
             actionFlag = scanner.name
             options.action = action
@@ -168,7 +168,7 @@ public struct AddOptions: Equatable, Sendable {
             case "--ics": try setAction(.printICS)
             case "--dry-run": try setAction(.dryRun)
 
-            case "--template": options.template = try scanner.single()
+            case "--template": options.template = trimmedNonEmpty(try scanner.single())  // "" = none
             case "--templates": options.templatesPath = (try scanner.single() as NSString).expandingTildeInPath
             case "--title": options.title = try scanner.single()
             case "--location": options.location = try scanner.single()
@@ -212,19 +212,22 @@ struct ArgumentScanner {
 
     /// The argument as typed.
     private(set) var argument = ""
-    /// The option name (`--title` for `--title=x`), or the positional argument.
+    /// The option's main name (`--title` for `--title=x`, `--timezone` for `--tz`), or the
+    /// positional argument. For matching; messages use `typed`.
     private(set) var name = ""
+    /// The option name as typed (`--tz`).
+    private(set) var typed = ""
     private(set) var inline: String?
+    /// Other spellings of this command's options, mapped to their main name.
+    private let aliases: [String: String]
 
-    init(_ arguments: [String], command: String) {
+    init(_ arguments: [String], command: String, aliases: [String: String] = [:]) {
         self.arguments = arguments
         self.command = command
+        self.aliases = aliases
     }
 
     var isOption: Bool { argument.hasPrefix("-") && argument.count > 1 }
-
-    /// Other spellings of an option, mapped to its main name.
-    static let aliases = ["--tz": "--timezone"]
 
     /// Moves to the next argument. Throws `HelpRequested` for `-h`/`--help`.
     mutating func next() throws -> Bool {
@@ -237,7 +240,8 @@ struct ArgumentScanner {
             name = String(argument[..<eq])
             inline = String(argument[argument.index(after: eq)...])
         }
-        name = Self.aliases[name] ?? name
+        typed = name
+        name = aliases[name] ?? name
         if name == "-h" || name == "--help" { throw HelpRequested() }
         return true
     }
@@ -246,7 +250,7 @@ struct ArgumentScanner {
     mutating func value() throws -> String {
         if let inline { return inline }
         guard index + 1 < arguments.count, !arguments[index + 1].hasPrefix("--") else {
-            throw CalUtilError("\(name) needs a value", usage: true)
+            throw CalUtilError("\(typed) needs a value", usage: true)
         }
         index += 1
         return arguments[index]
@@ -255,18 +259,19 @@ struct ArgumentScanner {
     /// Like `value()`, for options that may be given only once.
     mutating func single() throws -> String {
         guard seen.insert(name).inserted else {
-            throw CalUtilError("\(name) was given more than once", usage: true)
+            let spellings = [name] + aliases.filter { $0.value == name }.keys.sorted()
+            throw CalUtilError("\(spellings.joined(separator: " / ")) was given more than once", usage: true)
         }
         return try value()
     }
 
     func flag() throws {
-        guard inline == nil else { throw CalUtilError("\(name) does not take a value", usage: true) }
+        guard inline == nil else { throw CalUtilError("\(typed) does not take a value", usage: true) }
     }
 
     func unexpected() -> CalUtilError {
         if isOption {
-            return CalUtilError("unknown option \(name) for 'calutil \(command)' (see calutil help \(command))", usage: true)
+            return CalUtilError("unknown option \(typed) for 'calutil \(command)' (see calutil help \(command))", usage: true)
         }
         return CalUtilError("unexpected argument '\(argument)' for 'calutil \(command)' (see calutil help \(command))", usage: true)
     }

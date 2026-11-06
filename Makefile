@@ -2,7 +2,8 @@ PREFIX ?= $(HOME)/.local
 BINDIR := $(PREFIX)/bin
 # The same place calutil looks: $CALUTIL_TEMPLATES, else $XDG_CONFIG_HOME/calutil, else ~/.config/calutil.
 CONFIG_HOME := $(or $(XDG_CONFIG_HOME),$(HOME)/.config)
-TEMPLATES := $(or $(CALUTIL_TEMPLATES),$(CONFIG_HOME)/calutil/templates.json)
+# A leading ~ is expanded, as calutil does, in case the variable was set with it quoted.
+TEMPLATES := $(patsubst ~/%,$(HOME)/%,$(or $(CALUTIL_TEMPLATES),$(CONFIG_HOME)/calutil/templates.json))
 
 .PHONY: build test install install-templates uninstall clean
 

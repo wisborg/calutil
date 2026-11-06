@@ -236,10 +236,10 @@ enum EventKitBackend {
     // MARK: - Listing events
 
     static func listEvents(_ options: ListOptions) throws -> String {
-        let store = try authorizedStore()
         let zone = TimeZone.current
         let calendar = DateParsing.gregorian(zone)
         let now = Date()
+        // Check the input before asking for Calendar access.
         let day = try DateParsing.parseDay(options.day ?? "today", now: now, timeZone: zone)
         // Noon, then back to the start of the day: midnight itself can be skipped by DST.
         let noon = try DateParsing.makeDate(year: day.year, month: day.month, day: day.day,
@@ -247,6 +247,7 @@ enum EventKitBackend {
         let first = calendar.startOfDay(for: noon)
         let end = calendar.date(byAdding: .day, value: options.days, to: first)!
 
+        let store = try authorizedStore()
         let calendars = options.calendars.isEmpty ? nil : try calendarsToRead(options.calendars, in: store)
         let predicate = store.predicateForEvents(withStart: first, end: end, calendars: calendars)
         let events = store.events(matching: predicate).map { event in

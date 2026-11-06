@@ -37,13 +37,8 @@ public enum Summary {
         } else {
             // All-day events float, so show their alarms in the Mac's zone.
             let alarmZone = event.isAllDay ? localTimeZone : zone
-            let described = event.alarms.map { alarm -> (what: String, fires: String) in
-                let fires = format(alarm.fireDate(eventStart: event.start), alarmZone)
-                return switch alarm {
-                case .beforeStart(0): ("at the start", fires)
-                case .beforeStart(let seconds): ("\(Durations.describe(seconds)) before", fires)
-                case .at: ("at", fires)
-                }
+            let described = event.alarms.map { alarm in
+                (what: alarm.label, fires: format(alarm.fireDate(eventStart: event.start), alarmZone))
             }
             let whatWidth = described.map(\.what.count).max() ?? 0
             for (index, alarm) in described.enumerated() {

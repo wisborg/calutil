@@ -6,6 +6,15 @@ public enum Alarm: Hashable, Sendable {
     /// Fires at a fixed moment.
     case at(Date)
 
+    /// "1 week before", "at the start", or "at" for a fixed moment (followed by its time).
+    public var label: String {
+        switch self {
+        case .beforeStart(0): "at the start"
+        case .beforeStart(let seconds): "\(Durations.describe(seconds)) before"
+        case .at: "at"
+        }
+    }
+
     public func fireDate(eventStart: Date) -> Date {
         switch self {
         case .beforeStart(let seconds): eventStart.addingTimeInterval(-TimeInterval(seconds))
@@ -149,6 +158,26 @@ public enum Resolver {
         }
         alarms.sort { $0.fireDate(eventStart: start) < $1.fireDate(eventStart: start) }
 
+        // For an event still ahead, alarms that can no longer go off are left out (e.g. a
+        // template's "1w" for an event in two days), so what is shown is what gets saved.
+        // A past event keeps its alarms: it is being recorded or shared, not reminded of.
+        if start >= now {
+            // Sorted by when they fire, so the past ones come first.
+            let cut = alarms.firstIndex { $0.fireDate(eventStart: start) >= now } ?? alarms.count
+            if cut > 0 {
+                let names = alarms[..<cut].map { alarm in
+                    if case .at(let date) = alarm { return "at \(Summary.format(date, timeZone))" }
+                    return alarm.label
+                }
+                alarms.removeFirst(cut)
+                let what = cut == 1 ? "an alarm that is" : "alarms that are"
+                let hint = !alarms.isEmpty ? ""
+                    : o.alarms != nil ? " (no alarms left; give an --alarm that is still ahead)"
+                    : " (no alarms left; add one with --add-alarm)"
+                warnings.append("left out \(what) already in the past: \(names.joined(separator: ", "))\(hint)")
+            }
+        }
+
         // URL
         var url: URL?
         let urlText = pick(o.url, t?.url)
@@ -161,22 +190,6 @@ public enum Resolver {
 
         if start < now {
             warnings.append("the event starts in the past")
-        }
-        // Alarms that can no longer go off are left out (e.g. a template's "1w" for an
-        // event in two days), so what is shown is what gets saved.
-        let pastAlarms = alarms.filter { $0.fireDate(eventStart: start) < now }
-        if !pastAlarms.isEmpty {
-            alarms.removeAll { $0.fireDate(eventStart: start) < now }
-            let names = pastAlarms.map { alarm -> String in
-                switch alarm {
-                case .beforeStart(0): "at the start"
-                case .beforeStart(let seconds): "\(Durations.describe(seconds)) before"
-                case .at(let date): "at \(Summary.format(date, timeZone))"
-                }
-            }
-            let what = pastAlarms.count == 1 ? "an alarm that is" : "alarms that are"
-            warnings.append("left out \(what) already in the past: \(names.joined(separator: ", "))"
-                + (alarms.isEmpty && start >= now ? " (no alarms left; add one with --add-alarm)" : ""))
         }
 
         return EventSpec(

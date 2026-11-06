@@ -237,12 +237,35 @@ let concert = Template(name: "concert", notes: "Bring tickets", calendar: "Perso
         #expect(e.warnings == ["left out alarms that are already in the past: 1 week before, at Fri 30 Oct 2026 09:00"])
         let none = try resolve(["--title", "x", "--start", "2026-11-03T19:00", "--alarm", "1w"])
         #expect(none.alarms.isEmpty)
-        #expect(none.warnings == ["left out an alarm that is already in the past: 1 week before (no alarms left; add one with --add-alarm)"])
+        #expect(none.warnings == ["left out an alarm that is already in the past: 1 week before (no alarms left; give an --alarm that is still ahead)"])
+        // Template alarms point to --add-alarm instead. The event is an hour away.
+        let soon = try resolve(["--title", "x", "--start", "2026-11-01T02:00"], template: concert)
+        #expect(soon.alarms.isEmpty)
+        #expect(soon.warnings == ["left out alarms that are already in the past: 1 day before, 2 hours before (no alarms left; add one with --add-alarm)"])
+    }
+
+    @Test func pastEventKeepsItsAlarms() throws {
+        let e = try resolve(["--title", "x", "--start", "2026-10-01T19:00"], template: concert)
+        #expect(e.alarms == [.beforeStart(seconds: 86_400), .beforeStart(seconds: 7_200)])
+        #expect(e.warnings == ["the event starts in the past"])
+    }
+
+    @Test func pastAlarmsOnAllDayEvents() throws {
+        // Mon 2 Nov, all day: "1d" fired at Sun 1 Nov 00:00, an hour ago; 09:00 on the day is ahead.
+        let e = try resolve(["--title", "x", "--start", "2026-11-02", "--all-day", "--alarm", "1d", "--alarm", "09:00"])
+        #expect(e.alarms == [.at(utc("2026-11-02T08:00:00Z"))])
+        #expect(e.warnings == ["left out an alarm that is already in the past: 1 day before"])
+    }
+
+    @Test func alarmLabels() {
+        #expect(Alarm.beforeStart(seconds: 0).label == "at the start")
+        #expect(Alarm.beforeStart(seconds: 5_400).label == "1 hour 30 minutes before")
+        #expect(Alarm.at(now).label == "at")
     }
 
     @Test func warnsAboutThePast() throws {
         let e = try resolve(["--title", "x", "--start", "2026-10-01T19:00"])
-        #expect(e.warnings.contains("the event starts in the past"))
+        #expect(e.warnings == ["the event starts in the past"])
     }
 }
 

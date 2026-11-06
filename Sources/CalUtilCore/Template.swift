@@ -48,6 +48,26 @@ public enum TemplateStore {
         return (configHome as NSString).appendingPathComponent("calutil/templates.json")
     }
 
+    /// The templates as strict JSON (no comments), e.g. for jq. Only settings that are set
+    /// are included; keys are sorted so the output is stable.
+    public static func json(_ templates: [String: Template]) -> String {
+        var object: [String: Any] = [:]
+        for (name, t) in templates {
+            var fields: [String: Any] = [:]
+            let strings: [(String, String?)] = [
+                ("title", t.title), ("location", t.location), ("notes", t.notes), ("url", t.url),
+                ("calendar", t.calendar), ("timezone", t.timezone), ("time", t.time), ("duration", t.duration),
+            ]
+            for case let (key, value?) in strings { fields[key] = value }
+            if let allDay = t.allDay { fields["allDay"] = allDay }
+            if let alarms = t.alarms { fields["alarms"] = alarms }
+            object[name] = fields
+        }
+        let data = try! JSONSerialization.data(withJSONObject: object,
+                                               options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
+        return String(decoding: data, as: UTF8.self)
+    }
+
     public static func load(from path: String) throws -> [String: Template] {
         guard FileManager.default.fileExists(atPath: path) else {
             throw CalUtilError("no template file at \(path) (create it, or point --templates or $CALUTIL_TEMPLATES at one)")

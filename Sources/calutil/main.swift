@@ -71,8 +71,8 @@ func run() -> Int32 {
             print(Help.text(for: topic) ?? Help.text(for: nil)!)
         case .version:
             print("calutil \(Help.version)")
-        case .templates(let path):
-            print(try listTemplates(path))
+        case .templates(let path, let json):
+            print(json ? TemplateStore.json(try loadTemplates(path).templates) : try listTemplates(path))
         case .calendars(let verbose):
             print(try EventKitBackend.listCalendars(verbose: verbose))
         case .list(let options):

@@ -151,9 +151,14 @@ public enum Help {
     calutil templates: list the templates for 'calutil add'
 
     USAGE
-      calutil templates [--templates PATH]
+      calutil templates [--json] [--templates PATH]
 
       Templates are read from $CALUTIL_TEMPLATES, else ~/.config/calutil/templates.json.
       See 'calutil help add' for the file format.
+
+    OPTIONS
+      --json               Print the templates as strict JSON (without the file's comments),
+                           e.g. for jq: calutil templates --json | jq .concert
+      --templates PATH     Read this template file instead
     """
 }

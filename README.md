@@ -126,6 +126,9 @@ A JSON file at `~/.config/calutil/templates.json`, or wherever `$CALUTIL_TEMPLAT
 Settings: `title`, `location`, `notes`, `url`, `calendar`, `timezone`, `time`, `duration`,
 `allDay`, `alarms`. A misspelt setting is an error rather than being silently ignored.
 
+Because of the comments, tools such as `jq` can't read the file directly. `calutil templates
+--json` prints it as strict JSON instead: `calutil templates --json | jq .concert`.
+
 ## Development
 
 ```

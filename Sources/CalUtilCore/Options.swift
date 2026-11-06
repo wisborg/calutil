@@ -5,7 +5,7 @@ public enum Invocation: Equatable, Sendable {
     case add(AddOptions)
     case list(ListOptions)
     case calendars(verbose: Bool)
-    case templates(path: String?)
+    case templates(path: String?, json: Bool)
     /// Help, for one command when given.
     case help(String?)
     case version
@@ -47,13 +47,15 @@ public enum Invocation: Equatable, Sendable {
             if wantsHelp { return .help("templates") }
             var scanner = ArgumentScanner(rest, command: command)
             var path: String?
+            var json = false
             while scanner.next() {
                 switch scanner.name {
                 case "--templates": path = (try scanner.single() as NSString).expandingTildeInPath
+                case "--json": try scanner.flag(); json = true
                 default: throw scanner.unexpected()
                 }
             }
-            return .templates(path: path)
+            return .templates(path: path, json: json)
         default:
             if command.hasPrefix("-") {
                 throw CalUtilError("put the command first, e.g. calutil add \(command) … (see calutil help)", usage: true)

@@ -109,7 +109,8 @@ let concert = Template(name: "concert", notes: "Bring tickets", calendar: "Perso
         #expect(try parse("version") == .version)
         #expect(try parse("calendars") == .calendars(verbose: false))
         #expect(try parse("calendars", "-v") == .calendars(verbose: true))
-        #expect(try parse("templates", "--templates", "/x.json") == .templates(path: "/x.json"))
+        #expect(try parse("templates", "--templates", "/x.json") == .templates(path: "/x.json", json: false))
+        #expect(try parse("templates", "--json") == .templates(path: nil, json: true))
         guard case .add(let add) = try parse("add", "--title", "x", "--save") else {
             Issue.record("expected add"); return
         }
@@ -259,6 +260,17 @@ let concert = Template(name: "concert", notes: "Bring tickets", calendar: "Perso
     ])
     func rejects(_ text: String) {
         #expect(throws: CalUtilError.self) { try TemplateStore.parse(Data(text.utf8), source: "test") }
+    }
+
+    @Test func strictJSONRoundTrips() throws {
+        let templates = ["concert": concert, "birthday": Template(name: "birthday", url: "https://x.example/a", allDay: true, alarms: [])]
+        let json = TemplateStore.json(templates)
+        // Strict JSON: parses without JSON5 leniency, and back into the same templates.
+        let strict = try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: [String: Any]]
+        #expect(strict?["concert"]?["duration"] as? String == "3h")
+        #expect(strict?["birthday"]?["allDay"] as? Bool == true)
+        #expect(json.contains("\"https://x.example/a\""))  // slashes not escaped
+        #expect(try TemplateStore.parse(Data(json.utf8), source: "test") == templates)
     }
 
     @Test func defaultPath() {

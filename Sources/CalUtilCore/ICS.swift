@@ -2,12 +2,12 @@ import Foundation
 
 /// Renders an event as an RFC 5545 iCalendar file.
 public enum ICS {
-    public static func render(_ event: EventSpec, uid: String = UUID().uuidString + "@cal-add",
+    public static func render(_ event: EventSpec, uid: String = UUID().uuidString + "@calutil",
                               now: Date = Date()) -> String {
         var lines = [
             "BEGIN:VCALENDAR",
             "VERSION:2.0",
-            "PRODID:-//cal-add//cal-add \(CLI.version)//EN",
+            "PRODID:-//calutil//calutil \(Help.version)//EN",
             "CALSCALE:GREGORIAN",
         ]
         let zone = event.timeZone

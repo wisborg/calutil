@@ -1,4 +1,4 @@
-import CalAddCore
+import CalUtilCore
 import CoreGraphics
 import EventKit
 import Foundation
@@ -6,7 +6,7 @@ import Foundation
 enum EventKitBackend {
     /// Returns an event store with full Calendar access, asking for it the first time.
     static func authorizedStore() throws -> EKEventStore {
-        let settingsHint = "Allow it in System Settings → Privacy & Security → Calendars → cal-add, then try again."
+        let settingsHint = "Allow it in System Settings → Privacy & Security → Calendars → calutil, then try again."
         switch EKEventStore.authorizationStatus(for: .event) {
         case .fullAccess:
             return EKEventStore()
@@ -25,16 +25,16 @@ enum EventKitBackend {
             done.wait()
             guard outcome.granted else {
                 let reason = outcome.error.map { " (\($0.localizedDescription))" } ?? ""
-                throw CalAddError("cal-add was not given access to your calendars\(reason). \(settingsHint)")
+                throw CalUtilError("calutil was not given access to your calendars\(reason). \(settingsHint)")
             }
             // A fresh store sees the calendars that the new permission unlocked.
             return EKEventStore()
         case .writeOnly:
-            throw CalAddError("cal-add only has \"add events only\" access, but needs full access to find calendars by name. \(settingsHint)")
+            throw CalUtilError("calutil only has \"add events only\" access, but needs full access to find calendars by name. \(settingsHint)")
         case .denied, .restricted:
-            throw CalAddError("cal-add is not allowed to use your calendars. \(settingsHint)")
+            throw CalUtilError("calutil is not allowed to use your calendars. \(settingsHint)")
         @unknown default:
-            throw CalAddError("unexpected Calendar permission state. \(settingsHint)")
+            throw CalUtilError("unexpected Calendar permission state. \(settingsHint)")
         }
     }
 
@@ -68,7 +68,7 @@ enum EventKitBackend {
         do {
             try store.save(event, span: .thisEvent, commit: true)
         } catch {
-            throw CalAddError("Calendar refused the event: \(error.localizedDescription)")
+            throw CalUtilError("Calendar refused the event: \(error.localizedDescription)")
         }
         return calendar
     }
@@ -97,7 +97,7 @@ enum EventKitBackend {
         }
         if !duplicated.isEmpty {
             lines.append("\nSome names are used more than once; pick one of those with --calendar <id>.")
-            lines.append("cal-add --list-calendars --verbose shows what is in each calendar.")
+            lines.append("calutil calendars --verbose shows what is in each calendar.")
         }
         return lines.joined(separator: "\n")
     }
@@ -173,14 +173,14 @@ enum EventKitBackend {
     static func findCalendar(named name: String?, in store: EKEventStore) throws -> EKCalendar {
         guard let name else {
             guard let calendar = store.defaultCalendarForNewEvents else {
-                throw CalAddError("there is no default calendar; choose one with --calendar (see --list-calendars)")
+                throw CalUtilError("there is no default calendar; choose one with --calendar (see 'calutil calendars')")
             }
             return calendar
         }
         let all = store.calendars(for: .event)
         if let calendar = all.first(where: { $0.calendarIdentifier == name }) {
             guard calendar.allowsContentModifications else {
-                throw CalAddError("the calendar \(qualifiedName(calendar)) is read-only")
+                throw CalUtilError("the calendar \(qualifiedName(calendar)) is read-only")
             }
             return calendar
         }
@@ -197,18 +197,18 @@ enum EventKitBackend {
             let byName = Dictionary(grouping: writable, by: qualifiedName)
             if byName.count > 1 {
                 let names = byName.keys.sorted().map { "  \($0)" }.joined(separator: "\n")
-                throw CalAddError("more than one calendar is called '\(name)'; pick one with --calendar \"Account/Name\":\n\(names)")
+                throw CalUtilError("more than one calendar is called '\(name)'; pick one with --calendar \"Account/Name\":\n\(names)")
             }
             let ids = writable.map { calendar in
                 "  \(calendar.calendarIdentifier)" + (hexColor(calendar).map { "  (\($0))" } ?? "")
             }.joined(separator: "\n")
-            throw CalAddError("more than one calendar is called '\(qualifiedName(writable[0]))'; pick one with --calendar <id>:\n\(ids)")
+            throw CalUtilError("more than one calendar is called '\(qualifiedName(writable[0]))'; pick one with --calendar <id>:\n\(ids)")
         }
         if !matches.isEmpty {
-            throw CalAddError("the calendar '\(name)' is read-only")
+            throw CalUtilError("the calendar '\(name)' is read-only")
         }
         let available = all.filter(\.allowsContentModifications).map { "  \(qualifiedName($0))" }.sorted().joined(separator: "\n")
-        throw CalAddError("no calendar called '\(name)'. Calendars you can add to:\n\(available)")
+        throw CalUtilError("no calendar called '\(name)'. Calendars you can add to:\n\(available)")
     }
 }
 

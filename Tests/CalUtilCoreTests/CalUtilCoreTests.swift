@@ -1,16 +1,16 @@
 import Foundation
 import Testing
-@testable import CalAddCore
+@testable import CalUtilCore
 
 let sydney = TimeZone(identifier: "Australia/Sydney")!
 let copenhagen = TimeZone(identifier: "Europe/Copenhagen")!
 /// A fixed "now" before the test events.
 let now = ISO8601DateFormatter().date(from: "2026-11-01T00:00:00Z")!
 
-func options(_ args: String...) throws -> Options { try Options.parse(args) }
+func options(_ args: String...) throws -> AddOptions { try AddOptions.parse(args) }
 
 func resolve(_ args: [String], template: Template? = nil, local: TimeZone = copenhagen) throws -> EventSpec {
-    try Resolver.resolve(options: Options.parse(args), template: template, now: now, localTimeZone: local)
+    try Resolver.resolve(options: AddOptions.parse(args), template: template, now: now, localTimeZone: local)
 }
 
 func utc(_ text: String) -> Date { ISO8601DateFormatter().date(from: text)! }
@@ -30,7 +30,7 @@ let concert = Template(name: "concert", notes: "Bring tickets", calendar: "Perso
 
     @Test(arguments: ["", "90", "h", "1x", "30m1h", "1h1h", "1.5h", "-1h", "99999999999999999w"])
     func rejects(_ text: String) {
-        #expect(throws: CalAddError.self) { try Durations.parse(text) }
+        #expect(throws: CalUtilError.self) { try Durations.parse(text) }
     }
 
     @Test func formats() {
@@ -56,15 +56,15 @@ let concert = Template(name: "concert", notes: "Bring tickets", calendar: "Perso
 
     @Test(arguments: ["06-11-2026", "2026-13-01", "2026-11-06T25:00", "2026-11-06T18", "2026-11-06X18:00", "tomorrow"])
     func rejects(_ text: String) {
-        #expect(throws: CalAddError.self) { try DateParsing.parseDateTime(text) }
+        #expect(throws: CalUtilError.self) { try DateParsing.parseDateTime(text) }
     }
 
     @Test func impossibleDates() {
-        #expect(throws: CalAddError.self) {
+        #expect(throws: CalUtilError.self) {
             try DateParsing.makeDate(year: 2026, month: 2, day: 30, time: TimeOfDay(hour: 12, minute: 0), timeZone: copenhagen)
         }
         // 02:30 doesn't exist in Copenhagen on 2026-03-29 (clocks jump 02:00 → 03:00).
-        #expect(throws: CalAddError.self) {
+        #expect(throws: CalUtilError.self) {
             try DateParsing.makeDate(year: 2026, month: 3, day: 29, time: TimeOfDay(hour: 2, minute: 30), timeZone: copenhagen)
         }
     }
@@ -86,16 +86,43 @@ let concert = Template(name: "concert", notes: "Bring tickets", calendar: "Perso
     }
 
     @Test func usageErrors() {
-        #expect(throws: CalAddError.self) { try options("Beethoven") }           // positional
-        #expect(throws: CalAddError.self) { try options("--titel", "x") }        // typo
-        #expect(throws: CalAddError.self) { try options("--title") }             // missing value
-        #expect(throws: CalAddError.self) { try options("--title", "--start") }  // value looks like option
-        #expect(throws: CalAddError.self) { try options("--title", "a", "--title", "b") }
-        #expect(throws: CalAddError.self) { try options("--save", "--open") }
-        #expect(throws: CalAddError.self) { try options("--save=yes") }
-        #expect(throws: CalAddError.self) { try options("--no-alarms", "--alarm", "1h") }
-        #expect(throws: CalAddError.self) { try options("--verbose", "--title", "x") }
-        #expect((try? options("--list-calendars", "-v"))?.verbose == true)
+        #expect(throws: CalUtilError.self) { try options("Beethoven") }           // positional
+        #expect(throws: CalUtilError.self) { try options("--titel", "x") }        // typo
+        #expect(throws: CalUtilError.self) { try options("--title") }             // missing value
+        #expect(throws: CalUtilError.self) { try options("--title", "--start") }  // value looks like option
+        #expect(throws: CalUtilError.self) { try options("--title", "a", "--title", "b") }
+        #expect(throws: CalUtilError.self) { try options("--save", "--open") }
+        #expect(throws: CalUtilError.self) { try options("--save=yes") }
+        #expect(throws: CalUtilError.self) { try options("--no-alarms", "--alarm", "1h") }
+        #expect(throws: CalUtilError.self) { try options("--verbose", "--title", "x") }
+    }
+}
+
+@Suite struct InvocationTests {
+    func parse(_ args: String...) throws -> Invocation { try Invocation.parse(args) }
+
+    @Test func commands() throws {
+        #expect(try parse() == .help(nil))
+        #expect(try parse("--help") == .help(nil))
+        #expect(try parse("help", "add") == .help("add"))
+        #expect(try parse("add", "--title", "x", "-h") == .help("add"))
+        #expect(try parse("version") == .version)
+        #expect(try parse("calendars") == .calendars(verbose: false))
+        #expect(try parse("calendars", "-v") == .calendars(verbose: true))
+        #expect(try parse("templates", "--templates", "/x.json") == .templates(path: "/x.json"))
+        guard case .add(let add) = try parse("add", "--title", "x", "--save") else {
+            Issue.record("expected add"); return
+        }
+        #expect(add.title == "x" && add.action == .save)
+    }
+
+    @Test func errors() {
+        #expect(throws: CalUtilError.self) { try parse("--title", "x") }      // no command
+        #expect(throws: CalUtilError.self) { try parse("ad") }                // unknown command
+        #expect(throws: CalUtilError.self) { try parse("help", "nope") }
+        #expect(throws: CalUtilError.self) { try parse("calendars", "--save") }
+        #expect(throws: CalUtilError.self) { try parse("calendars", "Home") }
+        #expect(throws: CalUtilError.self) { try parse("calendars", "--verbose=yes") }
     }
 }
 
@@ -133,7 +160,7 @@ let concert = Template(name: "concert", notes: "Bring tickets", calendar: "Perso
     }
 
     @Test func dateOnlyStartWithoutTimeIsAnError() {
-        #expect(throws: CalAddError.self) { try resolve(["--title", "x", "--start", "2026-11-20"]) }
+        #expect(throws: CalUtilError.self) { try resolve(["--title", "x", "--start", "2026-11-20"]) }
     }
 
     @Test func alarmOverrides() throws {
@@ -157,7 +184,7 @@ let concert = Template(name: "concert", notes: "Bring tickets", calendar: "Perso
         #expect {
             try resolve(["--title", "x", "--start", "2026-11-20T19:00"], template: broken)
         } throws: { error in
-            (error as? CalAddError)?.message.contains("template 'broken'") == true
+            (error as? CalUtilError)?.message.contains("template 'broken'") == true
         }
     }
 
@@ -188,17 +215,17 @@ let concert = Template(name: "concert", notes: "Bring tickets", calendar: "Perso
         #expect(e.end == utc("2026-12-26T23:00:00Z"))
         let one = try resolve(["--title", "x", "--start", "2026-12-24", "--all-day"])
         #expect(one.end.timeIntervalSince(one.start) == 86_400)
-        #expect(throws: CalAddError.self) { try resolve(["--title", "x", "--start", "2026-12-24T10:00", "--all-day"]) }
-        #expect(throws: CalAddError.self) { try resolve(["--title", "x", "--start", "2026-12-24", "--all-day", "--duration", "5h"]) }
+        #expect(throws: CalUtilError.self) { try resolve(["--title", "x", "--start", "2026-12-24T10:00", "--all-day"]) }
+        #expect(throws: CalUtilError.self) { try resolve(["--title", "x", "--start", "2026-12-24", "--all-day", "--duration", "5h"]) }
     }
 
     @Test func otherErrors() {
-        #expect(throws: CalAddError.self) { try resolve(["--start", "2026-11-20T19:00"]) }
-        #expect(throws: CalAddError.self) { try resolve(["--title", "x"]) }
-        #expect(throws: CalAddError.self) { try resolve(["--title", "x", "--start", "2026-11-20T19:00", "--timezone", "Mars/Olympus"]) }
-        #expect(throws: CalAddError.self) { try resolve(["--title", "x", "--start", "2026-11-20T19:00", "--end", "2026-11-20T18:00"]) }
-        #expect(throws: CalAddError.self) { try resolve(["--title", "x", "--start", "2026-11-20T19:00", "--url", "example.com"]) }
-        #expect(throws: CalAddError.self) { try resolve(["--title", "x", "--start", "2026-11-20T19:00", "--alarm", "soon"]) }
+        #expect(throws: CalUtilError.self) { try resolve(["--start", "2026-11-20T19:00"]) }
+        #expect(throws: CalUtilError.self) { try resolve(["--title", "x"]) }
+        #expect(throws: CalUtilError.self) { try resolve(["--title", "x", "--start", "2026-11-20T19:00", "--timezone", "Mars/Olympus"]) }
+        #expect(throws: CalUtilError.self) { try resolve(["--title", "x", "--start", "2026-11-20T19:00", "--end", "2026-11-20T18:00"]) }
+        #expect(throws: CalUtilError.self) { try resolve(["--title", "x", "--start", "2026-11-20T19:00", "--url", "example.com"]) }
+        #expect(throws: CalUtilError.self) { try resolve(["--title", "x", "--start", "2026-11-20T19:00", "--alarm", "soon"]) }
     }
 
     @Test func warnsAboutThePast() throws {
@@ -231,13 +258,13 @@ let concert = Template(name: "concert", notes: "Bring tickets", calendar: "Perso
         #"{"a": "#,
     ])
     func rejects(_ text: String) {
-        #expect(throws: CalAddError.self) { try TemplateStore.parse(Data(text.utf8), source: "test") }
+        #expect(throws: CalUtilError.self) { try TemplateStore.parse(Data(text.utf8), source: "test") }
     }
 
     @Test func defaultPath() {
-        #expect(TemplateStore.defaultPath(environment: ["CAL_ADD_TEMPLATES": "/x/t.json"]) == "/x/t.json")
-        #expect(TemplateStore.defaultPath(environment: ["XDG_CONFIG_HOME": "/cfg"]) == "/cfg/cal-add/templates.json")
-        #expect(TemplateStore.defaultPath(environment: [:]).hasSuffix("/.config/cal-add/templates.json"))
+        #expect(TemplateStore.defaultPath(environment: ["CALUTIL_TEMPLATES": "/x/t.json"]) == "/x/t.json")
+        #expect(TemplateStore.defaultPath(environment: ["XDG_CONFIG_HOME": "/cfg"]) == "/cfg/calutil/templates.json")
+        #expect(TemplateStore.defaultPath(environment: [:]).hasSuffix("/.config/calutil/templates.json"))
     }
 }
 

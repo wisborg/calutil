@@ -1,7 +1,7 @@
-/// An error with a message meant for the person running cal-add.
-public struct CalAddError: Error, CustomStringConvertible, Equatable, Sendable {
+/// An error with a message meant for the person running calutil.
+public struct CalUtilError: Error, CustomStringConvertible, Equatable, Sendable {
     public var message: String
-    /// True when the problem is with how cal-add was invoked (exit status 2).
+    /// True when the problem is with how calutil was invoked (exit status 2).
     public var isUsage: Bool
 
     public init(_ message: String, usage: Bool = false) {

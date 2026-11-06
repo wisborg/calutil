@@ -3,16 +3,16 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>local.cal-add</string>
+    <string>local.calutil</string>
     <key>CFBundleName</key>
-    <string>cal-add</string>
+    <string>calutil</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.1.0</string>
+    <string>0.2.0</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>NSCalendarsFullAccessUsageDescription</key>
-    <string>cal-add adds events you create on the command line to your calendars, and looks up calendars by name.</string>
+    <string>calutil adds events you create on the command line to your calendars, and looks up calendars by name.</string>
     <key>NSCalendarsUsageDescription</key>
-    <string>cal-add adds events you create on the command line to your calendars, and looks up calendars by name.</string>
+    <string>calutil adds events you create on the command line to your calendars, and looks up calendars by name.</string>
 </dict>
 </plist>

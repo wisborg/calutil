@@ -38,7 +38,7 @@ public struct EventSpec: Equatable, Sendable {
 
 public enum Resolver {
     /// Combines the command line with a template (command line wins) and applies defaults.
-    public static func resolve(options o: Options, template t: Template?, now: Date = Date(),
+    public static func resolve(options o: AddOptions, template t: Template?, now: Date = Date(),
                                localTimeZone: TimeZone = .current) throws -> EventSpec {
         var warnings: [String] = []
         let fromTemplate = t.map { " (from template '\($0.name)')" } ?? ""
@@ -49,13 +49,13 @@ public enum Resolver {
             return (nonEmpty(template), true)
         }
         func inTemplate<T>(_ isTemplate: Bool, _ body: () throws -> T) throws -> T {
-            do { return try body() } catch let error as CalAddError where isTemplate {
-                throw CalAddError(error.message + fromTemplate)
+            do { return try body() } catch let error as CalUtilError where isTemplate {
+                throw CalUtilError(error.message + fromTemplate)
             }
         }
 
         guard let title = pick(o.title, t?.title).value else {
-            throw CalAddError("missing --title", usage: true)
+            throw CalUtilError("missing --title", usage: true)
         }
         let isAllDay = o.allDay ?? t?.allDay ?? false
 
@@ -64,7 +64,7 @@ public enum Resolver {
         let zone = pick(o.timezone, t?.timezone)
         if let name = zone.value {
             guard let parsed = TimeZone(identifier: name) else {
-                throw CalAddError("unknown time zone '\(name)'\(zone.fromTemplate ? fromTemplate : ""): use a name such as Australia/Sydney or Europe/Copenhagen")
+                throw CalUtilError("unknown time zone '\(name)'\(zone.fromTemplate ? fromTemplate : ""): use a name such as Australia/Sydney or Europe/Copenhagen")
             }
             if isAllDay {
                 if !zone.fromTemplate { warnings.append("--timezone is ignored for all-day events") }
@@ -76,13 +76,13 @@ public enum Resolver {
 
         // Start
         guard let startText = nonEmpty(o.start) else {
-            throw CalAddError("missing --start, e.g. --start 2026-11-06T18:00", usage: true)
+            throw CalUtilError("missing --start, e.g. --start 2026-11-06T18:00", usage: true)
         }
         let startInput = try DateParsing.parseDateTime(startText)
         let start: Date
         if isAllDay {
             guard startInput.time == nil else {
-                throw CalAddError("an all-day event takes a date without a time, e.g. --start \(startText.prefix(10))")
+                throw CalUtilError("an all-day event takes a date without a time, e.g. --start \(startText.prefix(10))")
             }
             start = try DateParsing.makeDate(startInput, time: TimeOfDay(hour: 0, minute: 0), defaultTimeZone: timeZone)
         } else {
@@ -91,14 +91,14 @@ public enum Resolver {
                 time = try inTemplate(true) { try DateParsing.parseTime(templateTime) }
             }
             guard let time else {
-                throw CalAddError("--start needs a time, e.g. \(startText)T18:00 (or add --all-day)")
+                throw CalUtilError("--start needs a time, e.g. \(startText)T18:00 (or add --all-day)")
             }
             start = try DateParsing.makeDate(startInput, time: time, defaultTimeZone: timeZone)
         }
 
         // End
         if o.end != nil && o.duration != nil {
-            throw CalAddError("use either --end or --duration, not both", usage: true)
+            throw CalUtilError("use either --end or --duration, not both", usage: true)
         }
         let end: Date
         if let endText = nonEmpty(o.end) {
@@ -112,7 +112,7 @@ public enum Resolver {
                 let days: Int
                 if let seconds {
                     guard seconds > 0, seconds % 86_400 == 0 else {
-                        throw CalAddError("an all-day event lasts whole days, e.g. --duration 1d or 3d\(duration.fromTemplate ? fromTemplate : "")")
+                        throw CalUtilError("an all-day event lasts whole days, e.g. --duration 1d or 3d\(duration.fromTemplate ? fromTemplate : "")")
                     }
                     days = seconds / 86_400
                 } else {
@@ -124,7 +124,7 @@ public enum Resolver {
             }
         }
         guard end > start else {
-            throw CalAddError("the event must end after it starts")
+            throw CalUtilError("the event must end after it starts")
         }
 
         // Alarms
@@ -151,7 +151,7 @@ public enum Resolver {
         let urlText = pick(o.url, t?.url)
         if let text = urlText.value {
             guard let parsed = URL(string: text), parsed.scheme != nil else {
-                throw CalAddError("invalid URL '\(text)'\(urlText.fromTemplate ? fromTemplate : ""): include the scheme, e.g. https://")
+                throw CalUtilError("invalid URL '\(text)'\(urlText.fromTemplate ? fromTemplate : ""): include the scheme, e.g. https://")
             }
             url = parsed
         }
@@ -181,7 +181,7 @@ public enum Resolver {
         if isAllDay {
             let input = try DateParsing.parseDateTime(text)
             guard input.time == nil else {
-                throw CalAddError("for an all-day event, --end is the last day, e.g. --end 2026-11-08")
+                throw CalUtilError("for an all-day event, --end is the last day, e.g. --end 2026-11-08")
             }
             let lastDay = try DateParsing.makeDate(input, time: TimeOfDay(hour: 0, minute: 0),
                                                    defaultTimeZone: calendar.timeZone)
@@ -190,7 +190,7 @@ public enum Resolver {
         if DateParsing.looksLikeDate(text) {
             let input = try DateParsing.parseDateTime(text)
             guard let time = input.time else {
-                throw CalAddError("--end needs a time, e.g. \(text)T21:00 or just 21:00")
+                throw CalUtilError("--end needs a time, e.g. \(text)T21:00 or just 21:00")
             }
             return try DateParsing.makeDate(input, time: time, defaultTimeZone: calendar.timeZone)
         }
@@ -205,12 +205,12 @@ public enum Resolver {
 
     static func parseAlarm(_ raw: String, start: Date, timeZone: TimeZone) throws -> Alarm {
         let text = raw.trimmingCharacters(in: .whitespaces)
-        let invalid = CalAddError(
+        let invalid = CalUtilError(
             "invalid alarm '\(raw)': use a time before the start (15m, 2h, 1d, 1h30m), a time on the event day (09:00), or a date and time (2026-11-05T09:00)")
         if DateParsing.looksLikeDate(text) {
             let input = try DateParsing.parseDateTime(text)
             guard let time = input.time else {
-                throw CalAddError("alarm '\(raw)' needs a time, e.g. \(text)T09:00")
+                throw CalUtilError("alarm '\(raw)' needs a time, e.g. \(text)T09:00")
             }
             return .at(try DateParsing.makeDate(input, time: time, defaultTimeZone: timeZone))
         }

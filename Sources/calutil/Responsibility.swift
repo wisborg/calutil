@@ -1,16 +1,16 @@
 import Darwin
 
 /// macOS charges a command-line tool's privacy permissions to the app it runs in
-/// (iTerm, Terminal, an IDE), so cal-add would be asking for *that app's* Calendar
+/// (iTerm, Terminal, an IDE), so calutil would be asking for *that app's* Calendar
 /// access, under that app's usage description, and fail if the app has none for full
 /// access, as with iTerm. Relaunching ourselves with responsibility disclaimed makes
-/// cal-add its own client: the dialog and the System Settings entry say "cal-add" and use
+/// calutil its own client: the dialog and the System Settings entry say "calutil" and use
 /// the Info.plist embedded in this binary.
 ///
 /// Returns the child's exit status, or nil when no relaunch happened (already the child,
 /// or the system call is unavailable), in which case the caller just carries on.
 func relaunchAsOwnResponsibleProcess() -> Int32? {
-    let marker = "CAL_ADD_RESPONSIBLE"
+    let marker = "CALUTIL_RESPONSIBLE"
     guard getenv(marker) == nil else { return nil }
 
     // Private but long-standing libsystem call; looked up at runtime so a missing symbol

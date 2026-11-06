@@ -11,7 +11,7 @@ public enum Durations {
     public static func parse(_ raw: String) throws -> Int {
         let text = raw.trimmingCharacters(in: .whitespaces).lowercased()
         if text == "0" { return 0 }
-        let invalid = CalAddError(
+        let invalid = CalUtilError(
             "invalid duration '\(raw)': use a number and a unit, e.g. 15m, 2h, 1h30m, 3d or 1w")
         guard !text.isEmpty else { throw invalid }
 

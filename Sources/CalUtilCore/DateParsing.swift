@@ -27,7 +27,7 @@ public enum DateParsing {
     /// Accepts `2026-11-06`, `2026-11-06T18:00`, `2026-11-06 18:00:30`,
     /// optionally followed by `Z`, `+11:00`, `+1100` or `+11`.
     public static func parseDateTime(_ raw: String) throws -> DateTimeInput {
-        let invalid = CalAddError(
+        let invalid = CalUtilError(
             "invalid date '\(raw)': use YYYY-MM-DD or YYYY-MM-DDTHH:MM, e.g. 2026-11-06T18:00")
         let chars = Array(raw.trimmingCharacters(in: .whitespaces))
         guard chars.count >= 10 else { throw invalid }
@@ -53,7 +53,7 @@ public enum DateParsing {
 
     /// Accepts `18:00`, `9:30`, `18:00:30`.
     public static func parseTime(_ raw: String) throws -> TimeOfDay {
-        let invalid = CalAddError("invalid time '\(raw)': use HH:MM, e.g. 19:30")
+        let invalid = CalUtilError("invalid time '\(raw)': use HH:MM, e.g. 19:30")
         let parts = raw.trimmingCharacters(in: .whitespaces)
             .split(separator: ":", omittingEmptySubsequences: false)
         guard parts.count == 2 || parts.count == 3,
@@ -82,14 +82,14 @@ public enum DateParsing {
                                     hour: time.hour, minute: time.minute, second: time.second)
         let text = String(format: "%04d-%02d-%02d %02d:%02d", year, month, day, time.hour, time.minute)
         guard let date = calendar.date(from: wanted) else {
-            throw CalAddError("invalid date \(text)")
+            throw CalUtilError("invalid date \(text)")
         }
         let got = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
         guard got.year == year, got.month == month, got.day == day else {
-            throw CalAddError("there is no such date: \(String(format: "%04d-%02d-%02d", year, month, day))")
+            throw CalUtilError("there is no such date: \(String(format: "%04d-%02d-%02d", year, month, day))")
         }
         guard got.hour == time.hour, got.minute == time.minute, got.second == time.second else {
-            throw CalAddError("\(text) does not exist in \(timeZone.identifier) (the clocks skip it for daylight saving time)")
+            throw CalUtilError("\(text) does not exist in \(timeZone.identifier) (the clocks skip it for daylight saving time)")
         }
         return date
     }
@@ -108,7 +108,7 @@ public enum DateParsing {
     // MARK: - Helpers
 
     private static func parseDate(_ text: String, original: String) throws -> (Int, Int, Int) {
-        let invalid = CalAddError(
+        let invalid = CalUtilError(
             "invalid date '\(original)': use YYYY-MM-DD or YYYY-MM-DDTHH:MM, e.g. 2026-11-06T18:00")
         let parts = text.split(separator: "-", omittingEmptySubsequences: false)
         guard parts.count == 3, parts[0].count == 4, parts[1].count == 2, parts[2].count == 2,
@@ -120,7 +120,7 @@ public enum DateParsing {
     }
 
     private static func parseOffset(_ text: String, original: String) throws -> Int {
-        let invalid = CalAddError("invalid UTC offset in '\(original)': use e.g. +11:00, -05:00 or Z")
+        let invalid = CalUtilError("invalid UTC offset in '\(original)': use e.g. +11:00, -05:00 or Z")
         let sign = text.first == "-" ? -1 : 1
         let digits = text.dropFirst().replacingOccurrences(of: ":", with: "")
         guard allDigits(digits), digits.count == 2 || digits.count == 4 else { throw invalid }

@@ -37,24 +37,24 @@ public struct Template: Equatable, Sendable {
 }
 
 public enum TemplateStore {
-    /// `$CAL_ADD_TEMPLATES`, else `$XDG_CONFIG_HOME/cal-add/templates.json`,
-    /// else `~/.config/cal-add/templates.json`.
+    /// `$CALUTIL_TEMPLATES`, else `$XDG_CONFIG_HOME/calutil/templates.json`,
+    /// else `~/.config/calutil/templates.json`.
     public static func defaultPath(environment: [String: String] = ProcessInfo.processInfo.environment) -> String {
-        if let path = environment["CAL_ADD_TEMPLATES"], !path.isEmpty {
+        if let path = environment["CALUTIL_TEMPLATES"], !path.isEmpty {
             return (path as NSString).expandingTildeInPath
         }
         let configHome = environment["XDG_CONFIG_HOME"].flatMap { $0.isEmpty ? nil : $0 }
             ?? (NSHomeDirectory() as NSString).appendingPathComponent(".config")
-        return (configHome as NSString).appendingPathComponent("cal-add/templates.json")
+        return (configHome as NSString).appendingPathComponent("calutil/templates.json")
     }
 
     public static func load(from path: String) throws -> [String: Template] {
         guard FileManager.default.fileExists(atPath: path) else {
-            throw CalAddError("no template file at \(path) (create it, or point --templates or $CAL_ADD_TEMPLATES at one)")
+            throw CalUtilError("no template file at \(path) (create it, or point --templates or $CALUTIL_TEMPLATES at one)")
         }
         let data: Data
         do { data = try Data(contentsOf: URL(fileURLWithPath: path)) } catch {
-            throw CalAddError("can't read \(path): \(error.localizedDescription)")
+            throw CalUtilError("can't read \(path): \(error.localizedDescription)")
         }
         return try parse(data, source: path)
     }
@@ -67,24 +67,24 @@ public enum TemplateStore {
             root = try JSONSerialization.jsonObject(with: data, options: [.json5Allowed])
         } catch {
             let detail = (error as NSError).userInfo[NSDebugDescriptionErrorKey] as? String ?? error.localizedDescription
-            throw CalAddError("\(source) is not valid JSON: \(detail)")
+            throw CalUtilError("\(source) is not valid JSON: \(detail)")
         }
         guard let object = root as? [String: Any] else {
-            throw CalAddError("\(source) must contain a JSON object mapping template names to settings")
+            throw CalUtilError("\(source) must contain a JSON object mapping template names to settings")
         }
 
         var templates: [String: Template] = [:]
         for (name, value) in object {
             let where_ = "\(source): template '\(name)'"
             guard let fields = value as? [String: Any] else {
-                throw CalAddError("\(where_) must be an object, e.g. { \"duration\": \"2h\" }")
+                throw CalUtilError("\(where_) must be an object, e.g. { \"duration\": \"2h\" }")
             }
             var template = Template(name: name)
             for (key, value) in fields {
                 switch key {
                 case _ where Template.stringKeys.contains(key):
                     guard let text = value as? String else {
-                        throw CalAddError("\(where_): \"\(key)\" must be a string")
+                        throw CalUtilError("\(where_): \"\(key)\" must be a string")
                     }
                     switch key {
                     case "title": template.title = text
@@ -98,7 +98,7 @@ public enum TemplateStore {
                     }
                 case "allDay":
                     guard let number = value as? NSNumber, CFGetTypeID(number) == CFBooleanGetTypeID() else {
-                        throw CalAddError("\(where_): \"allDay\" must be true or false")
+                        throw CalUtilError("\(where_): \"allDay\" must be true or false")
                     }
                     template.allDay = number.boolValue
                 case "alarms":
@@ -107,10 +107,10 @@ public enum TemplateStore {
                     } else if let list = value as? [Any], let strings = list as? [String], strings.count == list.count {
                         template.alarms = strings
                     } else {
-                        throw CalAddError("\(where_): \"alarms\" must be a list of strings, e.g. [\"1d\", \"2h\"]")
+                        throw CalUtilError("\(where_): \"alarms\" must be a list of strings, e.g. [\"1d\", \"2h\"]")
                     }
                 default:
-                    throw CalAddError("\(where_): unknown setting \"\(key)\" (known: \(Template.allKeys.joined(separator: ", ")))")
+                    throw CalUtilError("\(where_): unknown setting \"\(key)\" (known: \(Template.allKeys.joined(separator: ", ")))")
                 }
             }
             templates[name] = template

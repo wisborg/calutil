@@ -1,6 +1,6 @@
 PREFIX ?= $(HOME)/.local
 BINDIR := $(PREFIX)/bin
-TEMPLATES := $(HOME)/.config/cal-add/templates.json
+TEMPLATES := $(HOME)/.config/calutil/templates.json
 
 .PHONY: build test install install-templates uninstall clean
 
@@ -12,8 +12,10 @@ test:
 
 install: build
 	install -d "$(BINDIR)"
-	install -m 755 .build/release/cal-add "$(BINDIR)/cal-add"
-	@echo "Installed $(BINDIR)/cal-add"
+	install -m 755 .build/release/calutil "$(BINDIR)/calutil"
+	@echo "Installed $(BINDIR)/calutil"
+	@# This tool used to be called cal-add.
+	@if [ -e "$(BINDIR)/cal-add" ]; then rm -f "$(BINDIR)/cal-add" && echo "Removed the old $(BINDIR)/cal-add"; fi
 
 # Copies the example templates, but never over an existing file.
 install-templates:
@@ -26,7 +28,7 @@ install-templates:
 	fi
 
 uninstall:
-	rm -f "$(BINDIR)/cal-add"
+	rm -f "$(BINDIR)/calutil"
 
 clean:
 	swift package clean

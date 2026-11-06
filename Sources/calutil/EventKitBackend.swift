@@ -123,7 +123,7 @@ enum EventKitBackend {
         func eventLine(_ event: EKEvent) -> String {
             let zone = event.isAllDay ? TimeZone.current : (event.timeZone ?? TimeZone.current)
             let when = Summary.format(event.startDate, zone, time: !event.isAllDay)
-            return "\(when)  \(event.title ?? "(no title)")"
+            return "\(when)  \(nonEmpty(event.title) ?? "(no title)")"
         }
         func count(_ n: Int) -> String { n == 1 ? "1 event" : "\(n) events" }
 
@@ -252,7 +252,7 @@ enum EventKitBackend {
         let predicate = store.predicateForEvents(withStart: first, end: end, calendars: calendars)
         let events = store.events(matching: predicate).map { event in
             ListedEvent(
-                title: event.title ?? "(no title)",
+                title: nonEmpty(event.title) ?? "(no title)",
                 calendar: event.calendar?.title ?? "?",
                 calendarFullName: event.calendar.map(qualifiedName) ?? "?",
                 start: event.startDate,

@@ -438,12 +438,26 @@ let concert = Template(name: "concert", notes: "Bring tickets", calendar: "Perso
         """)
     }
 
+    @Test func longTitlesAreShortened() {
+        let long = String(repeating: "x", count: 60)
+        let text = render([
+            event(long, "2026-11-02T08:00:00Z", "2026-11-02T09:00:00Z", calendar: "Work"),
+            event("Short", "2026-11-02T10:00:00Z", "2026-11-02T11:00:00Z"),
+        ])
+        let lines = text.components(separatedBy: "\n")
+        #expect(lines[1] == "  09:00–10:00  " + String(repeating: "x", count: 39) + "…  Work")
+        #expect(lines[2] == "  11:00–12:00  Short" + String(repeating: " ", count: 35) + "  Home")
+        let verbose = render([event(long, "2026-11-02T08:00:00Z", "2026-11-02T09:00:00Z")], verbose: true)
+        #expect(verbose.contains("title     " + long))
+    }
+
     @Test func verbose() {
         var e = event("Dinner", "2026-11-02T18:00:00Z", "2026-11-02T20:00:00Z")
         e.location = "Mum's"
         e.notes = "Bring wine\nand dessert"
         e.isRecurring = true
         let text = render([e], verbose: true)
+        #expect(text.contains("\n               zone      Europe/Copenhagen\n"))
         #expect(text.contains("\n               where     Mum's\n"))
         #expect(text.contains("\n               repeats   yes\n"))
         #expect(text.contains("\n               calendar  iCloud/Home\n"))

@@ -124,7 +124,8 @@ public enum Help {
                            left out
       --calendar NAME      Only this calendar; repeat for more (default: all). Takes the same
                            names and ids as 'calutil add --calendar'.
-      -v, --verbose        Also show location, notes, URL, calendar and event id
+      -v, --verbose        Also show the full title, time zone, location, notes, URL,
+                           calendar and event id
 
     EXAMPLES
       calutil list

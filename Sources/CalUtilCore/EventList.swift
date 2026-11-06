@@ -43,6 +43,7 @@ public struct ListedEvent: Equatable, Sendable {
 
 /// Renders `calutil list` output: events grouped by day, in the local time zone.
 public enum EventList {
+    /// Longer titles are cut short with "…" (and shown in full with --verbose).
     static let maxTitleWidth = 40
 
     public static func render(_ events: [ListedEvent], from firstDay: Date, days: Int,
@@ -94,7 +95,7 @@ public enum EventList {
                 }
                 let columns = [
                     pad(timeRange(event, day: section.day, dayEnd: section.dayEnd, zone: zone), timeWidth),
-                    pad(event.title, titleWidth),
+                    pad(shorten(event.title, to: titleWidth), titleWidth),
                     extras.isEmpty ? event.calendar : pad(event.calendar, calendarWidth),
                 ] + extras
                 lines.append("  " + columns.joined(separator: "  ").trimmingTrailingSpaces())
@@ -102,6 +103,10 @@ public enum EventList {
                 if verbose {
                     let indent = String(repeating: " ", count: 2 + timeWidth + 2)
                     var details: [(String, String)] = []
+                    if event.title.count > titleWidth { details.append(("title", event.title)) }
+                    if !event.isAllDay {
+                        details.append(("zone", event.timeZone?.identifier ?? "none (floating: same clock time in any zone)"))
+                    }
                     if let location = event.location { details.append(("where", location)) }
                     if let url = event.url { details.append(("url", url.absoluteString)) }
                     if event.isRecurring { details.append(("repeats", "yes")) }
@@ -147,6 +152,10 @@ public enum EventList {
     static func clock(_ date: Date, _ zone: TimeZone) -> String {
         let c = DateParsing.gregorian(zone).dateComponents([.hour, .minute], from: date)
         return String(format: "%02d:%02d", c.hour!, c.minute!)
+    }
+
+    static func shorten(_ text: String, to width: Int) -> String {
+        text.count <= width ? text : String(text.prefix(width - 1)) + "…"
     }
 
     static func pad(_ text: String, _ width: Int) -> String {

@@ -1,0 +1,33 @@
+// cal-add templates. Copy to ~/.config/cal-add/templates.json and adjust.
+// JSON with comments and trailing commas allowed. Every setting is optional,
+// and anything given on the command line wins.
+//
+// Settings: title, location, notes, url, calendar, timezone, time, duration,
+//           allDay, alarms
+// Alarms:   "15m", "2h", "1d", "1w", "1h30m" before the start ("0" = at the start),
+//           "09:00" on the day of the event, or "2026-11-05T09:00" at that moment.
+{
+  "concert": {
+    "time": "19:30",              // used when --start is a date only
+    "duration": "3h",
+    "alarms": ["1d", "2h"],
+    "notes": "Bring the tickets.",
+  },
+
+  "dinner": {
+    "time": "19:00",
+    "duration": "2h30m",
+    "alarms": ["3h"],
+  },
+
+  "flight": {
+    "duration": "2h",
+    "alarms": ["1d", "4h"],
+    "notes": "Check in online. Passport!",
+  },
+
+  "birthday": {
+    "allDay": true,
+    "alarms": ["1w", "09:00"],     // a week before, and 09:00 on the day
+  },
+}

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>local.cal-add</string>
+    <key>CFBundleName</key>
+    <string>cal-add</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>cal-add adds events you create on the command line to your calendars, and looks up calendars by name.</string>
+    <key>NSCalendarsUsageDescription</key>
+    <string>cal-add adds events you create on the command line to your calendars, and looks up calendars by name.</string>
+</dict>
+</plist>

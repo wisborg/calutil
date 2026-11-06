@@ -73,11 +73,15 @@ enum EventKitBackend {
         return calendar
     }
 
-    static func listCalendars() throws -> String {
+    static func listCalendars(verbose: Bool) throws -> String {
         let store = try authorizedStore()
         let defaultID = store.defaultCalendarForNewEvents?.calendarIdentifier
         let calendars = store.calendars(for: .event).sorted { qualifiedName($0) < qualifiedName($1) }
         guard !calendars.isEmpty else { return "No calendars found." }
+        if verbose {
+            return calendars.map { describe($0, isDefault: $0.calendarIdentifier == defaultID, in: store) }
+                .joined(separator: "\n\n")
+        }
         let duplicated = Set(Dictionary(grouping: calendars, by: qualifiedName).filter { $1.count > 1 }.keys)
         let width = calendars.map { qualifiedName($0).count }.max() ?? 0
         var lines = calendars.map { calendar in
@@ -93,8 +97,60 @@ enum EventKitBackend {
         }
         if !duplicated.isEmpty {
             lines.append("\nSome names are used more than once; pick one of those with --calendar <id>.")
+            lines.append("cal-add --list-calendars --verbose shows what is in each calendar.")
         }
         return lines.joined(separator: "\n")
+    }
+
+    /// A block of details about one calendar, including its most recent and next events,
+    /// so calendars with the same name can be told apart.
+    static func describe(_ calendar: EKCalendar, isDefault: Bool, in store: EKEventStore) -> String {
+        var flags: [String] = []
+        if isDefault { flags.append("default") }
+        if !calendar.allowsContentModifications { flags.append("read-only") }
+        if calendar.isSubscribed { flags.append("subscribed") }
+        if let color = hexColor(calendar) { flags.append(color) }
+
+        let now = Date()
+        let yearAgo = Calendar.current.date(byAdding: .year, value: -1, to: now)!
+        let yearAhead = Calendar.current.date(byAdding: .year, value: 1, to: now)!
+        // Recurring events count once per occurrence.
+        let events = store.events(matching: store.predicateForEvents(withStart: yearAgo, end: yearAhead, calendars: [calendar]))
+            .sorted { $0.startDate < $1.startDate }
+        let past = events.filter { $0.startDate < now }
+        let upcoming = events.filter { $0.startDate >= now }
+
+        func eventLine(_ event: EKEvent) -> String {
+            let zone = event.isAllDay ? TimeZone.current : (event.timeZone ?? TimeZone.current)
+            let when = Summary.format(event.startDate, zone, time: !event.isAllDay)
+            return "\(when)  \(event.title ?? "(no title)")"
+        }
+        func count(_ n: Int) -> String { n == 1 ? "1 event" : "\(n) events" }
+
+        var rows: [(String, String)] = [
+            ("id", calendar.calendarIdentifier),
+            ("type", typeName(calendar.type)),
+            ("past year", count(past.count)),
+        ]
+        if let last = past.last { rows.append(("last", eventLine(last))) }
+        rows.append(("next year", count(upcoming.count)))
+        if let next = upcoming.first { rows.append(("next", eventLine(next))) }
+
+        let width = rows.map(\.0.count).max() ?? 0
+        let header = qualifiedName(calendar) + (flags.isEmpty ? "" : "  (" + flags.joined(separator: ", ") + ")")
+        return ([header] + rows.map { "  " + $0.0.padding(toLength: width, withPad: " ", startingAt: 0) + "  " + $0.1 })
+            .joined(separator: "\n")
+    }
+
+    static func typeName(_ type: EKCalendarType) -> String {
+        switch type {
+        case .local: "on this Mac"
+        case .calDAV: "CalDAV (iCloud and similar)"
+        case .exchange: "Exchange"
+        case .subscription: "subscription"
+        case .birthday: "birthdays"
+        @unknown default: "other"
+        }
     }
 
     /// The calendar's colour as #RRGGBB, to help tell same-named calendars apart.

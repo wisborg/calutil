@@ -54,7 +54,7 @@ program and ask again.
 --title TEXT  --start DATETIME  [--end DATETIME|TIME | --duration DUR]  [--all-day]
 --location TEXT  --notes TEXT  --url URL  --calendar NAME  --timezone ZONE
 --alarm WHEN (replaces the template's)  --add-alarm WHEN (adds)  --no-alarms
---template NAME  --templates PATH  --list-templates  --list-calendars
+--template NAME  --templates PATH  --list-templates  --list-calendars [--verbose]
 ```
 
 * **Dates:** `2026-11-06T18:00` or `"2026-11-06 18:00"`. A date alone is used for all-day

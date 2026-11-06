@@ -66,7 +66,7 @@ public enum Summary {
         }.joined(separator: "\n")
     }
 
-    static func format(_ date: Date, _ zone: TimeZone, time: Bool = true) -> String {
+    public static func format(_ date: Date, _ zone: TimeZone, time: Bool = true) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_GB")
         formatter.calendar = DateParsing.gregorian(zone)

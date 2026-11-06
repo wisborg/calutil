@@ -37,6 +37,7 @@ public struct Options: Equatable, Sendable {
     /// `--add-alarm` values; added to whatever alarms there are.
     public var addAlarms: [String] = []
     public var noAlarms = false
+    public var verbose = false
 
     public init() {}
 
@@ -86,6 +87,7 @@ public struct Options: Equatable, Sendable {
             case "--version": try flag(); options.command = .version
             case "--list-templates": try flag(); options.command = .listTemplates
             case "--list-calendars": try flag(); options.command = .listCalendars
+            case "-v", "--verbose": try flag(); options.verbose = true
 
             case "--save": try setAction(.save)
             case "--open": try setAction(.openICS)
@@ -122,6 +124,9 @@ public struct Options: Equatable, Sendable {
             index += 1
         }
 
+        if options.verbose && options.command != .listCalendars {
+            throw CalAddError("--verbose only applies to --list-calendars", usage: true)
+        }
         if options.noAlarms && options.alarms != nil {
             throw CalAddError("--no-alarms and --alarm can't be combined (--alarm already replaces the template's alarms)", usage: true)
         }
@@ -181,6 +186,8 @@ public enum CLI {
                            ~/.config/cal-add/templates.json)
       --list-templates     Show the templates
       --list-calendars     Show your calendars (needs Calendar access)
+      -v, --verbose        With --list-calendars: also show each calendar's id, colour, and
+                           how many events it has, with the latest and next one
       -h, --help           Show this help
       --version            Show the version
 

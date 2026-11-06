@@ -61,7 +61,7 @@ func run() -> Int32 {
         case .help: print(CLI.help); return 0
         case .version: print("cal-add \(CLI.version)"); return 0
         case .listTemplates: print(try listTemplates(options)); return 0
-        case .listCalendars: print(try EventKitBackend.listCalendars()); return 0
+        case .listCalendars: print(try EventKitBackend.listCalendars(verbose: options.verbose)); return 0
         case .run: break
         }
 

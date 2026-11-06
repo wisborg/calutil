@@ -94,6 +94,8 @@ let concert = Template(name: "concert", notes: "Bring tickets", calendar: "Perso
         #expect(throws: CalAddError.self) { try options("--save", "--open") }
         #expect(throws: CalAddError.self) { try options("--save=yes") }
         #expect(throws: CalAddError.self) { try options("--no-alarms", "--alarm", "1h") }
+        #expect(throws: CalAddError.self) { try options("--verbose", "--title", "x") }
+        #expect((try? options("--list-calendars", "-v"))?.verbose == true)
     }
 }
 

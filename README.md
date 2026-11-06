@@ -78,7 +78,8 @@ program and ask again.
   shows your local time too.
 * **Alarms:** `15m`, `2h`, `1d`, `1w`, `1h30m` before the start (`0` = at the start); `09:00`
   on the day of the event; or `2026-11-05T09:00` at an exact moment. Repeat the option for
-  more than one.
+  more than one. Alarms that would already be in the past (say, a template's `1w` for an
+  event in two days) are left out, with a warning.
 * **Calendars:** `--calendar Personal`; if two accounts both have one with that name, use
   `--calendar "iCloud/Personal"`; if even that is ambiguous (e.g. several shared calendars
   called "Family"), use the id that `calutil calendars` shows next to each of them.

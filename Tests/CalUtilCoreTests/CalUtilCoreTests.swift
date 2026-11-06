@@ -229,6 +229,17 @@ let concert = Template(name: "concert", notes: "Bring tickets", calendar: "Perso
         #expect(throws: CalUtilError.self) { try resolve(["--title", "x", "--start", "2026-11-20T19:00", "--alarm", "soon"]) }
     }
 
+    @Test func pastAlarmsAreLeftOut() throws {
+        // now = 1 Nov 01:00; the event is on 3 Nov 19:00, so "1w" is past but "1d" is not.
+        let e = try resolve(["--title", "x", "--start", "2026-11-03T19:00",
+                             "--alarm", "1w", "--alarm", "1d", "--alarm", "2026-10-30T09:00"])
+        #expect(e.alarms == [.beforeStart(seconds: 86_400)])
+        #expect(e.warnings == ["left out alarms that are already in the past: 1 week before, at Fri 30 Oct 2026 09:00"])
+        let none = try resolve(["--title", "x", "--start", "2026-11-03T19:00", "--alarm", "1w"])
+        #expect(none.alarms.isEmpty)
+        #expect(none.warnings == ["left out an alarm that is already in the past: 1 week before (no alarms left; add one with --add-alarm)"])
+    }
+
     @Test func warnsAboutThePast() throws {
         let e = try resolve(["--title", "x", "--start", "2026-10-01T19:00"])
         #expect(e.warnings.contains("the event starts in the past"))

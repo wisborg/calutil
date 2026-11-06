@@ -81,6 +81,8 @@ public enum Help {
         09:00                     at that time on the day of the event
         2026-11-05T09:00          at that date and time (in the event's time zone)
 
+      Alarms that would already be in the past are left out, with a warning.
+
     OTHER
       --templates PATH     Template file (default: $CALUTIL_TEMPLATES, else
                            ~/.config/calutil/templates.json)

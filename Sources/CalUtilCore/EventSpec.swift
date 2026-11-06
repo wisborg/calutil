@@ -161,8 +161,22 @@ public enum Resolver {
 
         if start < now {
             warnings.append("the event starts in the past")
-        } else if alarms.contains(where: { $0.fireDate(eventStart: start) < now }) {
-            warnings.append("at least one alarm is already in the past and won't go off")
+        }
+        // Alarms that can no longer go off are left out (e.g. a template's "1w" for an
+        // event in two days), so what is shown is what gets saved.
+        let pastAlarms = alarms.filter { $0.fireDate(eventStart: start) < now }
+        if !pastAlarms.isEmpty {
+            alarms.removeAll { $0.fireDate(eventStart: start) < now }
+            let names = pastAlarms.map { alarm -> String in
+                switch alarm {
+                case .beforeStart(0): "at the start"
+                case .beforeStart(let seconds): "\(Durations.describe(seconds)) before"
+                case .at(let date): "at \(Summary.format(date, timeZone))"
+                }
+            }
+            let what = pastAlarms.count == 1 ? "an alarm that is" : "alarms that are"
+            warnings.append("left out \(what) already in the past: \(names.joined(separator: ", "))"
+                + (alarms.isEmpty && start >= now ? " (no alarms left; add one with --add-alarm)" : ""))
         }
 
         return EventSpec(

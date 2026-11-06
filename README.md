@@ -67,7 +67,8 @@ program and ask again.
   on the day of the event; or `2026-11-05T09:00` at an exact moment. Repeat the option for
   more than one.
 * **Calendars:** `--calendar Personal`; if two accounts both have one with that name, use
-  `--calendar "iCloud/Personal"`. `cal-add --list-calendars` shows them all.
+  `--calendar "iCloud/Personal"`; if even that is ambiguous (e.g. several shared calendars
+  called "Family"), use the id that `cal-add --list-calendars` shows next to each of them.
 * An empty value (`--notes ""`) clears what the template set.
 
 ## Templates

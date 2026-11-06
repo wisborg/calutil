@@ -163,7 +163,8 @@ public enum CLI {
       --notes TEXT
       --url URL
       --calendar NAME      Calendar for --save (default: your default calendar). Use
-                           "Account/Name" if two calendars share a name. See --list-calendars.
+                           "Account/Name" if two calendars share a name, or the calendar's id
+                           (shown by --list-calendars) if even that is ambiguous.
 
     ALARMS
       --alarm WHEN         Set an alarm, replacing the template's alarms. Repeatable.

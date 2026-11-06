@@ -53,7 +53,7 @@ public enum EventList {
         // A title must fit on its row.
         let events = events.map { event in
             var event = event
-            event.title = event.title.components(separatedBy: .newlines)
+            event.title = event.title.lines
                 .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }.joined(separator: " ")
             return event
         }
@@ -123,7 +123,7 @@ public enum EventList {
                     let labelWidth = details.map(\.0.count).max() ?? 0
                     // Values can span lines (notes, and locations from Maps); keep them indented.
                     for (label, value) in details {
-                        for (index, line) in value.components(separatedBy: .newlines).enumerated() {
+                        for (index, line) in value.lines.enumerated() {
                             lines.append(indent + pad(index == 0 ? label : "", labelWidth) + "  " + line)
                         }
                     }

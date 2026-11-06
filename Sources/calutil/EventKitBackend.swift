@@ -123,7 +123,7 @@ enum EventKitBackend {
         func eventLine(_ event: EKEvent) -> String {
             let zone = event.isAllDay ? TimeZone.current : (event.timeZone ?? TimeZone.current)
             let when = Summary.format(event.startDate, zone, time: !event.isAllDay)
-            return "\(when)  \(nonEmpty(event.title) ?? "(no title)")"
+            return "\(when)  \(trimmedNonEmpty(event.title) ?? "(no title)")"
         }
         func count(_ n: Int) -> String { n == 1 ? "1 event" : "\(n) events" }
 
@@ -252,15 +252,15 @@ enum EventKitBackend {
         let predicate = store.predicateForEvents(withStart: first, end: end, calendars: calendars)
         let events = store.events(matching: predicate).map { event in
             ListedEvent(
-                title: nonEmpty(event.title) ?? "(no title)",
+                title: trimmedNonEmpty(event.title) ?? "(no title)",
                 calendar: event.calendar?.title ?? "?",
                 calendarFullName: event.calendar.map(qualifiedName) ?? "?",
                 start: event.startDate,
                 end: event.endDate,
                 isAllDay: event.isAllDay,
                 timeZone: event.timeZone,
-                location: nonEmpty(event.location),
-                notes: nonEmpty(event.notes),
+                location: trimmedNonEmpty(event.location),
+                notes: trimmedNonEmpty(event.notes),
                 url: event.url,
                 alarms: (event.alarms ?? []).map { alarm in
                     if let date = alarm.absoluteDate { return .at(date) }
@@ -273,10 +273,6 @@ enum EventKitBackend {
                                 verbose: options.verbose)
     }
 
-    private static func nonEmpty(_ text: String?) -> String? {
-        guard let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
-        return text.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
 }
 
 private extension Comparable {

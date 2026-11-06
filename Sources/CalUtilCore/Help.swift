@@ -86,6 +86,7 @@ public enum Help {
 
     OTHER
       --templates PATH     Template file (default: $CALUTIL_TEMPLATES, else
+                           $XDG_CONFIG_HOME/calutil/templates.json, else
                            ~/.config/calutil/templates.json)
 
       Values follow the option (--title "Beethoven's 9th") or an equals sign (--title=...).
@@ -156,7 +157,8 @@ public enum Help {
     USAGE
       calutil templates [--json] [--templates PATH]
 
-      Templates are read from $CALUTIL_TEMPLATES, else ~/.config/calutil/templates.json.
+      Templates are read from $CALUTIL_TEMPLATES, else $XDG_CONFIG_HOME/calutil/templates.json,
+      else ~/.config/calutil/templates.json.
       See 'calutil help add' for the file format.
 
     OPTIONS

@@ -28,6 +28,9 @@ func relaunchAsOwnResponsibleProcess() -> Int32? {
     guard setDisclaim(&attributes, 1) == 0 else { return nil }
 
     setenv(marker, "1", 1)
+    // If whoever started us ignores SIGCHLD, the child would be reaped before we can read
+    // its exit status.
+    signal(SIGCHLD, SIG_DFL)
     var child: pid_t = 0
     let spawned = posix_spawn(&child, path, nil, &attributes, CommandLine.unsafeArgv, environ)
     guard spawned == 0 else {
@@ -38,7 +41,13 @@ func relaunchAsOwnResponsibleProcess() -> Int32? {
     // The child shares the terminal and gets Ctrl-C itself; just wait for it.
     signal(SIGINT, SIG_IGN)
     var status: Int32 = 0
-    while waitpid(child, &status, 0) == -1 && errno == EINTR {}
+    var waited: pid_t
+    repeat { waited = waitpid(child, &status, 0) } while waited == -1 && errno == EINTR
+    guard waited == child else {
+        let message = "calutil: couldn't get the result of the Calendar access helper process\n"
+        _ = message.withCString { write(STDERR_FILENO, $0, strlen($0)) }
+        return 1
+    }
     let signalNumber = status & 0x7f
     return signalNumber == 0 ? (status >> 8) & 0xff : 128 + signalNumber
 }

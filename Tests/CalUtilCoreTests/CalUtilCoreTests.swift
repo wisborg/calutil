@@ -516,3 +516,73 @@ let concert = Template(name: "concert", notes: "Bring tickets", calendar: "Perso
         #expect(text.hasSuffix("\n               notes     Bring wine\n                         and dessert"))
     }
 }
+
+/// Regression tests for the whole-repo review.
+@Suite struct ReviewFindingTests {
+    @Test func allDayTodayIsNotInThePast() throws {
+        // now = Sun 1 Nov 01:00. "1w" is past; 09:00 today is still ahead.
+        let e = try resolve(["--title", "Mum", "--start", "today", "--all-day", "--alarm", "1w", "--alarm", "09:00"])
+        #expect(e.alarms == [.at(utc("2026-11-01T08:00:00Z"))])
+        #expect(e.warnings == ["left out an alarm that is already in the past: 1 week before"])
+        let yesterday = try resolve(["--title", "x", "--start", "yesterday", "--all-day"])
+        #expect(yesterday.warnings == ["the event starts in the past"])
+    }
+
+    @Test func offsetInStartIsTheEventsZone() throws {
+        let e = try resolve(["--title", "x", "--start", "2026-11-06T18:00+11:00", "--end", "21:00", "--alarm", "09:00"])
+        #expect(e.start == utc("2026-11-06T07:00:00Z"))
+        #expect(e.end == utc("2026-11-06T10:00:00Z"))  // 3 hours, not 13
+        #expect(e.alarms == [.at(utc("2026-11-05T22:00:00Z"))])
+        #expect(e.timeZone.secondsFromGMT(for: e.start) == 39_600)
+        // An explicit --timezone still wins for everything but the start's own instant.
+        let z = try resolve(["--title", "x", "--start", "2026-11-06T18:00+11:00", "--end", "21:00", "--timezone", "Europe/Copenhagen"])
+        #expect(z.start == utc("2026-11-06T07:00:00Z"))
+        #expect(z.end == utc("2026-11-06T20:00:00Z"))
+        #expect(z.timeZone == copenhagen)
+        // A UTC start gives a UTC event in the .ics.
+        let ics = ICS.render(try resolve(["--title", "x", "--start", "2026-11-06T07:00Z"]), uid: "u", now: now)
+        #expect(ics.contains("DTSTART:20261106T070000Z\r\n"))
+    }
+
+    @Test func allDayIgnoresATimedTemplatesDuration() throws {
+        let dinner = Template(name: "dinner", time: "19:00", duration: "2h30m", alarms: ["3h"])
+        let e = try resolve(["--title", "x", "--start", "2026-11-20", "--all-day"], template: dinner)
+        #expect(e.isAllDay)
+        #expect(e.end.timeIntervalSince(e.start) == 86_400)
+        // An all-day template's own duration still applies.
+        let trip = Template(name: "trip", duration: "3d", allDay: true)
+        let t = try resolve(["--title", "x", "--start", "2026-11-20"], template: trip)
+        #expect(t.end.timeIntervalSince(t.start) == 3 * 86_400)
+    }
+
+    @Test func helpOnlyInOptionPosition() throws {
+        guard case .add(let add) = try Invocation.parse(["add", "--title", "x", "--notes", "-h"]) else {
+            Issue.record("expected add"); return
+        }
+        #expect(add.notes == "-h")
+        #expect(try Invocation.parse(["add", "--title", "x", "-h"]) == .help("add"))
+        #expect(try Invocation.parse(["list", "--help"]) == .help("list"))
+        #expect(try Invocation.parse(["calendars", "-h"]) == .help("calendars"))
+        #expect(try Invocation.parse(["templates", "--help"]) == .help("templates"))
+    }
+
+    @Test func timezoneAliasCountsAsTheSameOption() throws {
+        #expect(throws: CalUtilError.self) { try AddOptions.parse(["--tz", "UTC", "--timezone", "Australia/Sydney"]) }
+        #expect(try AddOptions.parse(["--tz", "UTC"]).timezone == "UTC")
+    }
+
+    @Test func windowsLineBreaksAreOneBreak() {
+        #expect("a\r\nb\nc\rd".lines == ["a", "b", "c", "d"])
+        var e = ListedEvent(title: "x", calendar: "Home", calendarFullName: "iCloud/Home",
+                            start: utc("2026-11-02T08:00:00Z"), end: utc("2026-11-02T09:00:00Z"))
+        e.notes = "Agenda\r\nItem 1"
+        let text = EventList.render([e], from: utc("2026-11-01T23:00:00Z"), days: 1, timeZone: copenhagen, now: now, verbose: true)
+        #expect(text.hasSuffix("notes     Agenda\n                         Item 1"))
+    }
+
+    @Test func trimmedNonEmpty() {
+        #expect(CalUtilCore.trimmedNonEmpty("  Pilates \n") == "Pilates")
+        #expect(CalUtilCore.trimmedNonEmpty(" \n ") == nil)
+        #expect(CalUtilCore.trimmedNonEmpty(nil) == nil)
+    }
+}

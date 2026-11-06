@@ -49,7 +49,7 @@ public enum Summary {
 
         if let url = event.url { rows.append(("URL", url.absoluteString)) }
         if let notes = event.notes {
-            for (index, line) in notes.components(separatedBy: .newlines).enumerated() {
+            for (index, line) in notes.lines.enumerated() {
                 rows.append((index == 0 ? "Notes" : "", line))
             }
         }
@@ -61,13 +61,31 @@ public enum Summary {
         }.joined(separator: "\n")
     }
 
+    /// "Fri 6 Nov 2026 18:00", or without the time.
     public static func format(_ date: Date, _ zone: TimeZone, time: Bool = true) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_GB")
-        formatter.calendar = DateParsing.gregorian(zone)
-        formatter.timeZone = zone
-        formatter.dateFormat = time ? "EEE d MMM yyyy HH:mm" : "EEE d MMM yyyy"
-        return formatter.string(from: date)
+        Formatters.shared.formatter(zone: zone, time: time).string(from: date)
+    }
+
+    /// DateFormatters are costly to create and `list` formats many dates, so keep one per
+    /// time zone and style.
+    private final class Formatters: @unchecked Sendable {
+        static let shared = Formatters()
+        private let lock = NSLock()
+        private var cache: [String: DateFormatter] = [:]
+
+        func formatter(zone: TimeZone, time: Bool) -> DateFormatter {
+            let key = "\(zone.identifier)|\(zone.secondsFromGMT())|\(time)"
+            lock.lock()
+            defer { lock.unlock() }
+            if let formatter = cache[key] { return formatter }
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_GB")
+            formatter.calendar = DateParsing.gregorian(zone)
+            formatter.timeZone = zone
+            formatter.dateFormat = time ? "EEE d MMM yyyy HH:mm" : "EEE d MMM yyyy"
+            cache[key] = formatter
+            return formatter
+        }
     }
 
     static func zoneLabel(_ zone: TimeZone, at date: Date) -> String {

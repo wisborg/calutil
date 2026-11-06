@@ -1,6 +1,8 @@
 PREFIX ?= $(HOME)/.local
 BINDIR := $(PREFIX)/bin
-TEMPLATES := $(HOME)/.config/calutil/templates.json
+# The same place calutil looks: $CALUTIL_TEMPLATES, else $XDG_CONFIG_HOME/calutil, else ~/.config/calutil.
+CONFIG_HOME := $(or $(XDG_CONFIG_HOME),$(HOME)/.config)
+TEMPLATES := $(or $(CALUTIL_TEMPLATES),$(CONFIG_HOME)/calutil/templates.json)
 
 .PHONY: build test install install-templates uninstall clean
 

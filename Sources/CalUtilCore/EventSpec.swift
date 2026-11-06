@@ -81,7 +81,6 @@ public enum Resolver {
                 timeZone = parsed
             }
         }
-        let calendar = DateParsing.gregorian(timeZone)
 
         // Start
         guard let startText = nonEmpty(o.start) else {
@@ -106,7 +105,13 @@ public enum Resolver {
                 throw CalUtilError("--start needs a time, e.g. \(example) (or add --all-day)")
             }
             start = try DateParsing.makeDate(startInput, time: time, defaultTimeZone: timeZone)
+            // An offset typed in --start (Z, +11:00) is the event's zone unless --timezone says
+            // otherwise, so a bare --end time and HH:MM alarms are read in it too.
+            if zone.value == nil, let offset = startInput.utcOffset, let fixed = TimeZone(secondsFromGMT: offset) {
+                timeZone = fixed
+            }
         }
+        let calendar = DateParsing.gregorian(timeZone)
 
         // End
         if o.end != nil && o.duration != nil {
@@ -116,7 +121,9 @@ public enum Resolver {
         if let endText = nonEmpty(o.end) {
             end = try resolveEnd(endText, start: start, isAllDay: isAllDay, calendar: calendar, now: now)
         } else {
-            let duration = pick(o.duration, o.end != nil ? nil : t?.duration)
+            // A timed template's duration doesn't fit an event made all-day with --all-day.
+            let templateDuration = o.end != nil || (isAllDay && t?.allDay != true) ? nil : t?.duration
+            let duration = pick(o.duration, templateDuration)
             let seconds = try inTemplate(duration.fromTemplate) {
                 try duration.value.map(Durations.parse)
             }
@@ -158,10 +165,14 @@ public enum Resolver {
         }
         alarms.sort { $0.fireDate(eventStart: start) < $1.fireDate(eventStart: start) }
 
+        // An all-day event starts at midnight, so one for today counts as ahead until the day
+        // is over; a timed event is past once it has started.
+        let startsInPast = isAllDay ? start < calendar.startOfDay(for: now) : start < now
+
         // For an event still ahead, alarms that can no longer go off are left out (e.g. a
         // template's "1w" for an event in two days), so what is shown is what gets saved.
         // A past event keeps its alarms: it is being recorded or shared, not reminded of.
-        if start >= now {
+        if !startsInPast {
             // Sorted by when they fire, so the past ones come first.
             let cut = alarms.firstIndex { $0.fireDate(eventStart: start) >= now } ?? alarms.count
             if cut > 0 {
@@ -188,7 +199,7 @@ public enum Resolver {
             url = parsed
         }
 
-        if start < now {
+        if startsInPast {
             warnings.append("the event starts in the past")
         }
 
@@ -254,7 +265,21 @@ public enum Resolver {
     }
 }
 
+/// The text as given, or nil when it is empty or only whitespace.
 func nonEmpty(_ text: String?) -> String? {
     guard let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
     return text
+}
+
+/// The text with surrounding whitespace removed, or nil when nothing is left. For values
+/// read from calendars, which often carry stray spaces and line breaks.
+public func trimmedNonEmpty(_ text: String?) -> String? {
+    nonEmpty(text)?.trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+extension String {
+    /// Lines split on \n, \r\n or \r, with \r\n counted as one break.
+    var lines: [String] {
+        replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: .newlines)
+    }
 }

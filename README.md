@@ -109,8 +109,8 @@ notes, the full calendar name and the event id.
 
 ## Templates
 
-A JSON file at `~/.config/calutil/templates.json`, or wherever `$CALUTIL_TEMPLATES` or
-`--templates` points. Comments and trailing commas are allowed. See
+A JSON file at `~/.config/calutil/templates.json` (or `$XDG_CONFIG_HOME/calutil/templates.json`
+if you set that), or wherever `$CALUTIL_TEMPLATES` or `--templates` points. Comments and trailing commas are allowed. See
 [`templates.example.json`](templates.example.json).
 
 ```jsonc

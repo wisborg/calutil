@@ -15,7 +15,6 @@ public enum Invocation: Equatable, Sendable {
     public static func parse(_ arguments: [String]) throws -> Invocation {
         guard let command = arguments.first else { return .help(nil) }
         let rest = Array(arguments.dropFirst())
-        let wantsHelp = rest.contains("-h") || rest.contains("--help")
 
         switch command {
         case "-h", "--help":
@@ -29,33 +28,35 @@ public enum Invocation: Equatable, Sendable {
         case "version", "--version":
             return .version
         case "add":
-            return wantsHelp ? .help("add") : .add(try AddOptions.parse(rest))
+            return try helpOr("add") { .add(try AddOptions.parse(rest)) }
         case "list":
-            return wantsHelp ? .help("list") : .list(try ListOptions.parse(rest))
+            return try helpOr("list") { .list(try ListOptions.parse(rest)) }
         case "calendars":
-            if wantsHelp { return .help("calendars") }
-            var scanner = ArgumentScanner(rest, command: command)
-            var verbose = false
-            while scanner.next() {
-                switch scanner.name {
-                case "-v", "--verbose": try scanner.flag(); verbose = true
-                default: throw scanner.unexpected()
+            return try helpOr("calendars") {
+                var scanner = ArgumentScanner(rest, command: command)
+                var verbose = false
+                while try scanner.next() {
+                    switch scanner.name {
+                    case "-v", "--verbose": try scanner.flag(); verbose = true
+                    default: throw scanner.unexpected()
+                    }
                 }
+                return .calendars(verbose: verbose)
             }
-            return .calendars(verbose: verbose)
         case "templates":
-            if wantsHelp { return .help("templates") }
-            var scanner = ArgumentScanner(rest, command: command)
-            var path: String?
-            var json = false
-            while scanner.next() {
-                switch scanner.name {
-                case "--templates": path = (try scanner.single() as NSString).expandingTildeInPath
-                case "--json": try scanner.flag(); json = true
-                default: throw scanner.unexpected()
+            return try helpOr("templates") {
+                var scanner = ArgumentScanner(rest, command: command)
+                var path: String?
+                var json = false
+                while try scanner.next() {
+                    switch scanner.name {
+                    case "--templates": path = (try scanner.single() as NSString).expandingTildeInPath
+                    case "--json": try scanner.flag(); json = true
+                    default: throw scanner.unexpected()
+                    }
                 }
+                return .templates(path: path, json: json)
             }
-            return .templates(path: path, json: json)
         default:
             if command.hasPrefix("-") {
                 throw CalUtilError("put the command first, e.g. calutil add \(command) … (see calutil help)", usage: true)
@@ -81,7 +82,7 @@ public struct ListOptions: Equatable, Sendable {
     public static func parse(_ arguments: [String]) throws -> ListOptions {
         var options = ListOptions()
         var scanner = ArgumentScanner(arguments, command: "list")
-        while scanner.next() {
+        while try scanner.next() {
             switch scanner.name {
             case "--days":
                 let text = try scanner.single()
@@ -101,6 +102,14 @@ public struct ListOptions: Equatable, Sendable {
         }
         return options
     }
+}
+
+/// Thrown by the scanner when `-h`/`--help` appears where an option is expected.
+struct HelpRequested: Error {}
+
+/// Runs a command's parser, turning a help request anywhere in it into `.help(command)`.
+private func helpOr(_ command: String, _ parse: () throws -> Invocation) throws -> Invocation {
+    do { return try parse() } catch is HelpRequested { return .help(command) }
 }
 
 public enum Action: Equatable, Sendable {
@@ -152,7 +161,7 @@ public struct AddOptions: Equatable, Sendable {
             options.action = action
         }
 
-        while scanner.next() {
+        while try scanner.next() {
             switch scanner.name {
             case "--save": try setAction(.save)
             case "--open": try setAction(.openICS)
@@ -166,7 +175,7 @@ public struct AddOptions: Equatable, Sendable {
             case "--notes": options.notes = try scanner.single()
             case "--url": options.url = try scanner.single()
             case "--calendar": options.calendar = try scanner.single()
-            case "--timezone", "--tz": options.timezone = try scanner.single()
+            case "--timezone": options.timezone = try scanner.single()
             case "--start": options.start = try scanner.single()
             case "--end": options.end = try scanner.single()
             case "--duration": options.duration = try scanner.single()
@@ -214,7 +223,11 @@ struct ArgumentScanner {
 
     var isOption: Bool { argument.hasPrefix("-") && argument.count > 1 }
 
-    mutating func next() -> Bool {
+    /// Other spellings of an option, mapped to its main name.
+    static let aliases = ["--tz": "--timezone"]
+
+    /// Moves to the next argument. Throws `HelpRequested` for `-h`/`--help`.
+    mutating func next() throws -> Bool {
         index += 1
         guard index < arguments.count else { return false }
         argument = arguments[index]
@@ -224,6 +237,8 @@ struct ArgumentScanner {
             name = String(argument[..<eq])
             inline = String(argument[argument.index(after: eq)...])
         }
+        name = Self.aliases[name] ?? name
+        if name == "-h" || name == "--help" { throw HelpRequested() }
         return true
     }
 

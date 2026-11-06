@@ -451,14 +451,19 @@ let concert = Template(name: "concert", notes: "Bring tickets", calendar: "Perso
         #expect(verbose.contains("title     " + long))
     }
 
+    @Test func multiLineTitleIsFlattened() {
+        let text = render([event("Dinner\n at Mum's", "2026-11-02T18:00:00Z", "2026-11-02T20:00:00Z")])
+        #expect(text.hasSuffix("19:00–21:00  Dinner at Mum's  Home"))
+    }
+
     @Test func verbose() {
         var e = event("Dinner", "2026-11-02T18:00:00Z", "2026-11-02T20:00:00Z")
-        e.location = "Mum's"
+        e.location = "Mum's\nCopenhagen"
         e.notes = "Bring wine\nand dessert"
         e.isRecurring = true
         let text = render([e], verbose: true)
         #expect(text.contains("\n               zone      Europe/Copenhagen\n"))
-        #expect(text.contains("\n               where     Mum's\n"))
+        #expect(text.contains("\n               where     Mum's\n                         Copenhagen\n"))
         #expect(text.contains("\n               repeats   yes\n"))
         #expect(text.contains("\n               calendar  iCloud/Home\n"))
         #expect(text.contains("\n               id        id-Dinner\n"))

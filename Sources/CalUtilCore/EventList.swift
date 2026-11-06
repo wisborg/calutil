@@ -50,6 +50,13 @@ public enum EventList {
                               timeZone zone: TimeZone, now: Date, verbose: Bool) -> String {
         let calendar = DateParsing.gregorian(zone)
         let today = calendar.startOfDay(for: now)
+        // A title must fit on its row.
+        let events = events.map { event in
+            var event = event
+            event.title = event.title.components(separatedBy: .newlines)
+                .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }.joined(separator: " ")
+            return event
+        }
 
         var sections: [(day: Date, dayEnd: Date, events: [ListedEvent])] = []
         for offset in 0..<days {
@@ -112,13 +119,14 @@ public enum EventList {
                     if event.isRecurring { details.append(("repeats", "yes")) }
                     details.append(("calendar", event.calendarFullName))
                     if let id = event.identifier { details.append(("id", id)) }
-                    if let notes = event.notes {
-                        for (index, line) in notes.components(separatedBy: .newlines).enumerated() {
-                            details.append((index == 0 ? "notes" : "", line))
+                    if let notes = event.notes { details.append(("notes", notes)) }
+                    let labelWidth = details.map(\.0.count).max() ?? 0
+                    // Values can span lines (notes, and locations from Maps); keep them indented.
+                    for (label, value) in details {
+                        for (index, line) in value.components(separatedBy: .newlines).enumerated() {
+                            lines.append(indent + pad(index == 0 ? label : "", labelWidth) + "  " + line)
                         }
                     }
-                    let labelWidth = details.map(\.0.count).max() ?? 0
-                    lines += details.map { indent + pad($0.0, labelWidth) + "  " + $0.1 }
                 }
             }
             blocks.append(lines.joined(separator: "\n"))

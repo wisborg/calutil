@@ -53,6 +53,10 @@ func openInCalendar(_ spec: EventSpec) throws -> URL {
 func run() -> Int32 {
     do {
         let options = try Options.parse(Array(CommandLine.arguments.dropFirst()))
+        if options.command == .listCalendars || (options.command == .run && options.action == .save),
+           let status = relaunchAsOwnResponsibleProcess() {
+            return status
+        }
         switch options.command {
         case .help: print(CLI.help); return 0
         case .version: print("cal-add \(CLI.version)"); return 0

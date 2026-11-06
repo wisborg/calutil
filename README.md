@@ -31,14 +31,20 @@ make install-templates    # copies templates.example.json to ~/.config/cal-add/t
 
 ## Calendar access
 
-The first `--save` or `--list-calendars` asks macOS for access to your calendars. Depending on
-how macOS attributes the request, the dialog names either your terminal app (Terminal, iTerm)
-or cal-add. Choose **Allow Full Access**: cal-add needs to read your calendar list so it can
-find calendars by name.
+The first `--save` or `--list-calendars` asks macOS for access to your calendars. Choose
+**Allow Full Access**: cal-add needs to read your calendar list so it can find calendars by
+name.
 
-If you said no, or the dialog never appeared, change it under **System Settings → Privacy &
-Security → Calendars**. If you need to start over: `tccutil reset Calendar` (this resets every
-app's calendar permission, so you'll be asked again).
+Normally macOS charges a command-line tool's permissions to the terminal app it runs in, which
+would give every program in that terminal calendar access, and fails outright in terminals
+such as iTerm that don't declare full calendar access. To avoid that, cal-add relaunches
+itself as its own "responsible" process for `--save` and `--list-calendars`, so the permission
+belongs to **cal-add** alone and works the same in any terminal.
+
+If you said no, change it under **System Settings → Privacy & Security → Calendars → cal-add**.
+
+The binary is ad-hoc signed, so macOS may treat a rebuilt or reinstalled cal-add as a new
+program and ask again.
 
 `--dry-run`, `--ics` and `--open` need no permission.
 

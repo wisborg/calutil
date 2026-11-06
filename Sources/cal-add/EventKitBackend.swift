@@ -5,7 +5,7 @@ import Foundation
 enum EventKitBackend {
     /// Returns an event store with full Calendar access, asking for it the first time.
     static func authorizedStore() throws -> EKEventStore {
-        let settingsHint = "Allow it in System Settings → Privacy & Security → Calendars (look for your terminal app or cal-add), then try again."
+        let settingsHint = "Allow it in System Settings → Privacy & Security → Calendars → cal-add, then try again."
         switch EKEventStore.authorizationStatus(for: .event) {
         case .fullAccess:
             return EKEventStore()

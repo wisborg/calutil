@@ -51,6 +51,49 @@ public enum DateParsing {
         return DateTimeInput(year: year, month: month, day: day, time: time, utcOffset: offset)
     }
 
+    /// Like `parseDateTime(_:)`, but also accepts a day word, optionally with a time:
+    /// `today`, `tomorrow 18:00`, `friday 19:30` (see `parseDay`).
+    public static func parseDateTime(_ raw: String, now: Date, timeZone: TimeZone) throws -> DateTimeInput {
+        let text = raw.trimmingCharacters(in: .whitespaces)
+        if looksLikeDate(text) { return try parseDateTime(text) }
+        let parts = text.split(separator: " ", maxSplits: 1).map(String.init)
+        guard let word = parts.first else { throw invalidDay(raw) }
+        let (year, month, day) = try parseDay(word, now: now, timeZone: timeZone)
+        let time = try parts.count == 2 ? parseTime(parts[1]) : nil
+        return DateTimeInput(year: year, month: month, day: day, time: time, utcOffset: nil)
+    }
+
+    /// A calendar day: `today`, `tomorrow`, `yesterday`, a weekday (`friday`, `fri`: the
+    /// next one, today included), or `YYYY-MM-DD`.
+    public static func parseDay(_ raw: String, now: Date, timeZone: TimeZone) throws -> (year: Int, month: Int, day: Int) {
+        let text = raw.trimmingCharacters(in: .whitespaces).lowercased()
+        let calendar = gregorian(timeZone)
+        func day(_ offset: Int) -> (Int, Int, Int) {
+            let date = calendar.date(byAdding: .day, value: offset, to: now)!
+            let c = calendar.dateComponents([.year, .month, .day], from: date)
+            return (c.year!, c.month!, c.day!)
+        }
+        switch text {
+        case "today": return day(0)
+        case "tomorrow": return day(1)
+        case "yesterday": return day(-1)
+        default: break
+        }
+        let weekdays = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
+        if text.count >= 3, let index = weekdays.firstIndex(where: { $0.hasPrefix(text) }) {
+            let today = calendar.component(.weekday, from: now)  // 1 = Sunday
+            return day((index + 1 - today + 7) % 7)
+        }
+        guard looksLikeDate(text), let input = try? parseDateTime(text), input.time == nil else {
+            throw invalidDay(raw)
+        }
+        return (input.year, input.month, input.day)
+    }
+
+    private static func invalidDay(_ raw: String) -> CalUtilError {
+        CalUtilError("invalid day '\(raw)': use today, tomorrow, yesterday, a weekday such as friday, or YYYY-MM-DD")
+    }
+
     /// Accepts `18:00`, `9:30`, `18:00:30`.
     public static func parseTime(_ raw: String) throws -> TimeOfDay {
         let invalid = CalUtilError("invalid time '\(raw)': use HH:MM, e.g. 19:30")

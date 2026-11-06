@@ -52,6 +52,19 @@ public enum Durations {
         return parts.joined(separator: " ")
     }
 
+    /// The short form `parse` accepts: "1d2h", "15m", "1w", "0".
+    public static func compact(_ seconds: Int) -> String {
+        if seconds == 0 { return "0" }
+        var rest = seconds
+        var out = ""
+        for unit in units {
+            let n = rest / unit.seconds
+            rest %= unit.seconds
+            if n > 0 { out += "\(n)\(unit.symbol)" }
+        }
+        return out
+    }
+
     /// RFC 5545 duration (without sign), e.g. "P1DT2H30M", "PT15M", "PT0S".
     public static func icalendar(_ seconds: Int) -> String {
         if seconds == 0 { return "PT0S" }

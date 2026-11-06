@@ -1,18 +1,19 @@
 # calutil
 
 Work with Apple Calendar from the command line: add events (using templates for the ones you
-add often) and see your calendars.
+add often), see what's on, and look at your calendars.
 
 ```
 calutil add --template concert --title "Beethoven's 9th" --location "Sydney Opera House" \
             --start 2026-11-06T18:00 --add-alarm 15m
+calutil list tomorrow
 calutil calendars --verbose
-calutil templates
 ```
 
 | Command     | What it does                                                    |
 |-------------|-----------------------------------------------------------------|
 | `add`       | Add an event (a dry run unless you pass `--save` or `--open`)   |
+| `list`      | Show the events on a day, or over several days                  |
 | `calendars` | List your calendars; `--verbose` adds ids, colours and contents |
 | `templates` | List the templates for `add`                                    |
 | `help`      | `calutil help <command>` shows every option of a command        |
@@ -42,7 +43,7 @@ make install-templates    # copies templates.example.json to ~/.config/calutil/t
 
 ## Calendar access
 
-The first `calutil add --save` or `calutil calendars` asks macOS for access to your calendars. Choose
+The first `calutil add --save`, `calutil list` or `calutil calendars` asks macOS for access to your calendars. Choose
 **Allow Full Access**: calutil needs to read your calendar list so it can find calendars by
 name.
 
@@ -57,7 +58,7 @@ If you said no, change it under **System Settings → Privacy & Security → Cal
 The binary is ad-hoc signed, so macOS may treat a rebuilt or reinstalled calutil as a new
 program and ask again.
 
-A dry run, `--ics`, `--open` and `calutil templates` need no permission.
+`calutil add` without `--save`, and `calutil templates`, need no permission.
 
 ## `add` options in short
 
@@ -68,8 +69,9 @@ A dry run, `--ics`, `--open` and `calutil templates` need no permission.
 --template NAME  --templates PATH
 ```
 
-* **Dates:** `2026-11-06T18:00` or `"2026-11-06 18:00"`. A date alone is used for all-day
-  events, or when the template sets a `time`. `--end 21:30` means the same day (or the next
+* **Dates:** `2026-11-06T18:00` or `"2026-11-06 18:00"`, or with a day word: `today`,
+  `tomorrow`, `friday` (the next one, today included), `"tomorrow 18:00"`. A day alone is used
+  for all-day events, or when the template sets a `time`. `--end 21:30` means the same day (or the next
   day if it would otherwise be before the start).
 * **Time zones:** times are in this Mac's zone unless you pass `--timezone Australia/Sydney`
   (or end the time with `Z` or `+11:00`). The event keeps that zone in Calendar, and the dry run
@@ -81,6 +83,26 @@ A dry run, `--ics`, `--open` and `calutil templates` need no permission.
   `--calendar "iCloud/Personal"`; if even that is ambiguous (e.g. several shared calendars
   called "Family"), use the id that `calutil calendars` shows next to each of them.
 * An empty value (`--notes ""`) clears what the template set.
+
+## Listing events
+
+```
+calutil list                                  # today
+calutil list friday --calendar Home --calendar Family
+calutil list 2026-12-20 --days 14 --verbose
+```
+
+```
+Sat 14 Nov 2026
+  all day      Remembrance Day      Australian Holidays
+  04:00–09:00  Lake Shore Marathon  Home                 (06:00 Pacific/Auckland)  ⏰ 1d
+```
+
+Times are in this Mac's time zone; an event set in another zone also shows its own time.
+Events that run past midnight show on each day (`22:00–…`, then `…–01:30`). With `--days`,
+days without events are left out. `--calendar` takes the same names and ids as `add`, and a
+name shared by several calendars includes all of them. `--verbose` adds location, URL,
+notes, the full calendar name and the event id.
 
 ## Templates
 
@@ -111,7 +133,7 @@ swift test
 ```
 
 `Sources/CalUtilCore` holds everything that can be tested without touching your calendar:
-argument parsing, templates, dates, the summary and the iCalendar writer.
+argument parsing, templates, dates, the summary, the event list and the iCalendar writer.
 `Sources/calutil` is the executable and the EventKit code. `Sources/calutil/Info.plist` is
 linked into the binary, because macOS won't grant calendar access to a program that doesn't
 say why it wants it.

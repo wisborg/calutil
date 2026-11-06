@@ -78,11 +78,13 @@ public enum Resolver {
         guard let startText = nonEmpty(o.start) else {
             throw CalUtilError("missing --start, e.g. --start 2026-11-06T18:00", usage: true)
         }
-        let startInput = try DateParsing.parseDateTime(startText)
+        let startInput = try DateParsing.parseDateTime(startText, now: now, timeZone: timeZone)
+        let startIsDate = DateParsing.looksLikeDate(startText)
         let start: Date
         if isAllDay {
             guard startInput.time == nil else {
-                throw CalUtilError("an all-day event takes a date without a time, e.g. --start \(startText.prefix(10))")
+                let dayOnly = startIsDate ? String(startText.prefix(10)) : String(startText.split(separator: " ")[0])
+                throw CalUtilError("an all-day event takes a day without a time, e.g. --start \(dayOnly)")
             }
             start = try DateParsing.makeDate(startInput, time: TimeOfDay(hour: 0, minute: 0), defaultTimeZone: timeZone)
         } else {
@@ -91,7 +93,8 @@ public enum Resolver {
                 time = try inTemplate(true) { try DateParsing.parseTime(templateTime) }
             }
             guard let time else {
-                throw CalUtilError("--start needs a time, e.g. \(startText)T18:00 (or add --all-day)")
+                let example = startIsDate ? "\(startText)T18:00" : "\"\(startText) 18:00\""
+                throw CalUtilError("--start needs a time, e.g. \(example) (or add --all-day)")
             }
             start = try DateParsing.makeDate(startInput, time: time, defaultTimeZone: timeZone)
         }
@@ -102,7 +105,7 @@ public enum Resolver {
         }
         let end: Date
         if let endText = nonEmpty(o.end) {
-            end = try resolveEnd(endText, start: start, isAllDay: isAllDay, calendar: calendar)
+            end = try resolveEnd(endText, start: start, isAllDay: isAllDay, calendar: calendar, now: now)
         } else {
             let duration = pick(o.duration, o.end != nil ? nil : t?.duration)
             let seconds = try inTemplate(duration.fromTemplate) {
@@ -177,9 +180,9 @@ public enum Resolver {
             warnings: warnings)
     }
 
-    static func resolveEnd(_ text: String, start: Date, isAllDay: Bool, calendar: Calendar) throws -> Date {
+    static func resolveEnd(_ text: String, start: Date, isAllDay: Bool, calendar: Calendar, now: Date) throws -> Date {
         if isAllDay {
-            let input = try DateParsing.parseDateTime(text)
+            let input = try DateParsing.parseDateTime(text, now: now, timeZone: calendar.timeZone)
             guard input.time == nil else {
                 throw CalUtilError("for an all-day event, --end is the last day, e.g. --end 2026-11-08")
             }
@@ -187,15 +190,14 @@ public enum Resolver {
                                                    defaultTimeZone: calendar.timeZone)
             return calendar.date(byAdding: .day, value: 1, to: lastDay)!
         }
-        if DateParsing.looksLikeDate(text) {
-            let input = try DateParsing.parseDateTime(text)
+        guard let time = try? DateParsing.parseTime(text) else {
+            let input = try DateParsing.parseDateTime(text, now: now, timeZone: calendar.timeZone)
             guard let time = input.time else {
-                throw CalUtilError("--end needs a time, e.g. \(text)T21:00 or just 21:00")
+                throw CalUtilError("--end needs a time, e.g. \"\(text) 21:00\" or just 21:00")
             }
             return try DateParsing.makeDate(input, time: time, defaultTimeZone: calendar.timeZone)
         }
         // A bare time: on the start day, or the day after if that is not after the start.
-        let time = try DateParsing.parseTime(text)
         let day = calendar.dateComponents([.year, .month, .day], from: start)
         var end = try DateParsing.makeDate(year: day.year!, month: day.month!, day: day.day!,
                                            time: time, timeZone: calendar.timeZone)

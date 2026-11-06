@@ -178,18 +178,12 @@ enum EventKitBackend {
             return calendar
         }
         let all = store.calendars(for: .event)
-        if let calendar = all.first(where: { $0.calendarIdentifier == name }) {
-            guard calendar.allowsContentModifications else {
-                throw CalUtilError("the calendar \(qualifiedName(calendar)) is read-only")
+        let matches = calendars(matching: name, in: all)
+        if matches.count == 1, matches[0].calendarIdentifier == name {
+            guard matches[0].allowsContentModifications else {
+                throw CalUtilError("the calendar \(qualifiedName(matches[0])) is read-only")
             }
-            return calendar
-        }
-        var matches = all.filter { $0.title == name || qualifiedName($0) == name }
-        if matches.isEmpty {
-            matches = all.filter {
-                $0.title.caseInsensitiveCompare(name) == .orderedSame
-                    || qualifiedName($0).caseInsensitiveCompare(name) == .orderedSame
-            }
+            return matches[0]
         }
         let writable = matches.filter(\.allowsContentModifications)
         if writable.count == 1 { return writable[0] }
@@ -209,6 +203,78 @@ enum EventKitBackend {
         }
         let available = all.filter(\.allowsContentModifications).map { "  \(qualifiedName($0))" }.sorted().joined(separator: "\n")
         throw CalUtilError("no calendar called '\(name)'. Calendars you can add to:\n\(available)")
+    }
+
+    /// Calendars to read from: every calendar matching each name (read-only ones too).
+    static func calendarsToRead(_ names: [String], in store: EKEventStore) throws -> [EKCalendar] {
+        let all = store.calendars(for: .event)
+        var chosen: [EKCalendar] = []
+        for name in names {
+            let matches = calendars(matching: name, in: all)
+            guard !matches.isEmpty else {
+                let available = Set(all.map(\.title)).sorted().map { "  \($0)" }.joined(separator: "\n")
+                throw CalUtilError("no calendar called '\(name)'. Your calendars:\n\(available)")
+            }
+            for calendar in matches where !chosen.contains(where: { $0.calendarIdentifier == calendar.calendarIdentifier }) {
+                chosen.append(calendar)
+            }
+        }
+        return chosen
+    }
+
+    /// An id match, else exact name or "Account/Name" matches, else case-insensitive ones.
+    static func calendars(matching name: String, in all: [EKCalendar]) -> [EKCalendar] {
+        if let calendar = all.first(where: { $0.calendarIdentifier == name }) { return [calendar] }
+        let exact = all.filter { $0.title == name || qualifiedName($0) == name }
+        if !exact.isEmpty { return exact }
+        return all.filter {
+            $0.title.caseInsensitiveCompare(name) == .orderedSame
+                || qualifiedName($0).caseInsensitiveCompare(name) == .orderedSame
+        }
+    }
+
+    // MARK: - Listing events
+
+    static func listEvents(_ options: ListOptions) throws -> String {
+        let store = try authorizedStore()
+        let zone = TimeZone.current
+        let calendar = DateParsing.gregorian(zone)
+        let now = Date()
+        let day = try DateParsing.parseDay(options.day ?? "today", now: now, timeZone: zone)
+        // Noon, then back to the start of the day: midnight itself can be skipped by DST.
+        let noon = try DateParsing.makeDate(year: day.year, month: day.month, day: day.day,
+                                            time: TimeOfDay(hour: 12, minute: 0), timeZone: zone)
+        let first = calendar.startOfDay(for: noon)
+        let end = calendar.date(byAdding: .day, value: options.days, to: first)!
+
+        let calendars = options.calendars.isEmpty ? nil : try calendarsToRead(options.calendars, in: store)
+        let predicate = store.predicateForEvents(withStart: first, end: end, calendars: calendars)
+        let events = store.events(matching: predicate).map { event in
+            ListedEvent(
+                title: event.title ?? "(no title)",
+                calendar: event.calendar?.title ?? "?",
+                calendarFullName: event.calendar.map(qualifiedName) ?? "?",
+                start: event.startDate,
+                end: event.endDate,
+                isAllDay: event.isAllDay,
+                timeZone: event.timeZone,
+                location: nonEmpty(event.location),
+                notes: nonEmpty(event.notes),
+                url: event.url,
+                alarms: (event.alarms ?? []).map { alarm in
+                    if let date = alarm.absoluteDate { return .at(date) }
+                    return .beforeStart(seconds: Int(-alarm.relativeOffset))
+                },
+                isRecurring: event.hasRecurrenceRules,
+                identifier: event.eventIdentifier)
+        }
+        return EventList.render(events, from: first, days: options.days, timeZone: zone, now: now,
+                                verbose: options.verbose)
+    }
+
+    private static func nonEmpty(_ text: String?) -> String? {
+        guard let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 

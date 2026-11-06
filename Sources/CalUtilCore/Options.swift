@@ -3,13 +3,14 @@ import Foundation
 /// What to run, parsed from the command line: `calutil <command> [options]`.
 public enum Invocation: Equatable, Sendable {
     case add(AddOptions)
+    case list(ListOptions)
     case calendars(verbose: Bool)
     case templates(path: String?)
     /// Help, for one command when given.
     case help(String?)
     case version
 
-    public static let commands = ["add", "calendars", "templates", "help", "version"]
+    public static let commands = ["add", "list", "calendars", "templates", "help", "version"]
 
     public static func parse(_ arguments: [String]) throws -> Invocation {
         guard let command = arguments.first else { return .help(nil) }
@@ -29,6 +30,8 @@ public enum Invocation: Equatable, Sendable {
             return .version
         case "add":
             return wantsHelp ? .help("add") : .add(try AddOptions.parse(rest))
+        case "list":
+            return wantsHelp ? .help("list") : .list(try ListOptions.parse(rest))
         case "calendars":
             if wantsHelp { return .help("calendars") }
             var scanner = ArgumentScanner(rest, command: command)
@@ -57,6 +60,44 @@ public enum Invocation: Equatable, Sendable {
             }
             throw CalUtilError("unknown command '\(command)' (commands: \(commands.joined(separator: ", ")))", usage: true)
         }
+    }
+}
+
+/// `calutil list [DAY] [--days N] [--calendar NAME]... [--verbose]`
+public struct ListOptions: Equatable, Sendable {
+    /// Nil means today.
+    public var day: String?
+    public var days = 1
+    /// Empty means all calendars.
+    public var calendars: [String] = []
+    public var verbose = false
+
+    public init() {}
+
+    public static let maxDays = 1_000
+
+    public static func parse(_ arguments: [String]) throws -> ListOptions {
+        var options = ListOptions()
+        var scanner = ArgumentScanner(arguments, command: "list")
+        while scanner.next() {
+            switch scanner.name {
+            case "--days":
+                let text = try scanner.single()
+                guard let days = Int(text), (1...maxDays).contains(days) else {
+                    throw CalUtilError("--days takes a number from 1 to \(maxDays), not '\(text)'", usage: true)
+                }
+                options.days = days
+            case "--calendar": options.calendars.append(try scanner.value())
+            case "-v", "--verbose": try scanner.flag(); options.verbose = true
+            default:
+                if scanner.isOption { throw scanner.unexpected() }
+                guard options.day == nil else {
+                    throw CalUtilError("give one day to list (use --days for more than one)", usage: true)
+                }
+                options.day = scanner.argument
+            }
+        }
+        return options
     }
 }
 

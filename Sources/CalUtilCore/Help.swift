@@ -5,6 +5,7 @@ public enum Help {
         switch topic {
         case nil: general
         case "add": add
+        case "list": list
         case "calendars": calendars
         case "templates": templates
         case "help": general
@@ -21,6 +22,7 @@ public enum Help {
 
     COMMANDS
       add          Add an event (a dry run unless you pass --save or --open)
+      list         Show the events on a day, or over several days
       calendars    List your calendars
       templates    List the event templates for 'add'
       help [CMD]   Show help, for one command if given
@@ -30,7 +32,8 @@ public enum Help {
 
     EXAMPLES
       calutil add --template concert --title "Beethoven's 9th" --start 2026-11-28 --save
-      calutil calendars --verbose
+      calutil list tomorrow
+      calutil list 2026-12-20 --days 14 --calendar Home
     """
 
     static let add = """
@@ -55,6 +58,7 @@ public enum Help {
       --start DATETIME     2026-11-06T18:00 or "2026-11-06 18:00". A date alone (2026-11-06) is
                            allowed for all-day events, or when the template sets a "time".
                            A trailing Z or offset (+11:00) pins the exact moment.
+                           Day words work too: today, tomorrow, friday, "tomorrow 18:00".
       --end DATETIME|TIME  When it ends. A bare time (21:30) means the start day, or the next
                            day if that would be before the start. All-day: the last day.
       --duration DUR       Length instead of --end: 90m, 2h, 1h30m, 3d (default 1h; all-day 1d)
@@ -103,6 +107,29 @@ public enum Help {
     EXAMPLE
       calutil add --template concert --title "Beethoven's 9th" --location "Sydney Opera House" \\
                   --start 2026-11-06T18:00 --timezone Australia/Sydney --add-alarm 15m --save
+    """
+
+    static let list = """
+    calutil list: show the events on a day, or over several days
+
+    USAGE
+      calutil list [DAY] [--days N] [--calendar NAME]... [--verbose]
+
+      DAY is today (the default), tomorrow, yesterday, a weekday (friday: the next one, today
+      included) or a date (2026-11-14). Times are in this Mac's time zone; an event set in
+      another zone also shows its own time.
+
+    OPTIONS
+      --days N             Show N days starting at DAY (default 1); days without events are
+                           left out
+      --calendar NAME      Only this calendar; repeat for more (default: all). Takes the same
+                           names and ids as 'calutil add --calendar'.
+      -v, --verbose        Also show location, notes, URL, calendar and event id
+
+    EXAMPLES
+      calutil list
+      calutil list friday --calendar Home --calendar Family
+      calutil list 2026-12-20 --days 14
     """
 
     static let calendars = """

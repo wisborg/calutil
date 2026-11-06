@@ -333,3 +333,121 @@ let concert = Template(name: "concert", notes: "Bring tickets", calendar: "Perso
         #expect(text.contains("2 hours before  Fri 6 Nov 2026 16:00"))
     }
 }
+
+// `now` is Sun 1 Nov 2026, 01:00 in Copenhagen.
+@Suite struct DayWordTests {
+    func day(_ text: String) throws -> String {
+        let d = try DateParsing.parseDay(text, now: now, timeZone: copenhagen)
+        return String(format: "%04d-%02d-%02d", d.year, d.month, d.day)
+    }
+
+    @Test func words() throws {
+        #expect(try day("today") == "2026-11-01")
+        #expect(try day("Tomorrow") == "2026-11-02")
+        #expect(try day("yesterday") == "2026-10-31")
+        #expect(try day("sunday") == "2026-11-01")  // today counts
+        #expect(try day("mon") == "2026-11-02")
+        #expect(try day("thurs") == "2026-11-05")
+        #expect(try day("saturday") == "2026-11-07")
+        #expect(try day("2026-12-24") == "2026-12-24")
+    }
+
+    @Test(arguments: ["", "mo", "someday", "2026-12-24T10:00", "next friday"])
+    func rejects(_ text: String) {
+        #expect(throws: CalUtilError.self) { try DateParsing.parseDay(text, now: now, timeZone: copenhagen) }
+    }
+
+    @Test func dayWordsInAdd() throws {
+        let e = try resolve(["--title", "x", "--start", "tomorrow 18:00", "--end", "friday 09:00"])
+        #expect(e.start == utc("2026-11-02T17:00:00Z"))
+        #expect(e.end == utc("2026-11-06T08:00:00Z"))
+        let allDay = try resolve(["--title", "x", "--start", "fri", "--all-day"])
+        #expect(allDay.start == utc("2026-11-05T23:00:00Z"))
+        let templated = try resolve(["--title", "x", "--start", "tomorrow"], template: concert)
+        #expect(templated.start == utc("2026-11-02T18:30:00Z"))
+        #expect(throws: CalUtilError.self) { try resolve(["--title", "x", "--start", "tomorrow"]) }
+    }
+
+    @Test func compactDurations() {
+        #expect(Durations.compact(86_400 + 7_200) == "1d2h")
+        #expect(Durations.compact(900) == "15m")
+        #expect(Durations.compact(604_800) == "1w")
+    }
+}
+
+@Suite struct ListTests {
+    @Test func parsing() throws {
+        #expect(try Invocation.parse(["list"]) == .list(ListOptions()))
+        guard case .list(let o) = try Invocation.parse(["list", "friday", "--days", "7", "--calendar", "Home", "--calendar", "Family", "-v"]) else {
+            Issue.record("expected list"); return
+        }
+        #expect(o.day == "friday" && o.days == 7 && o.calendars == ["Home", "Family"] && o.verbose)
+        #expect(try Invocation.parse(["list", "-h"]) == .help("list"))
+        #expect(throws: CalUtilError.self) { try ListOptions.parse(["today", "tomorrow"]) }
+        #expect(throws: CalUtilError.self) { try ListOptions.parse(["--days", "0"]) }
+        #expect(throws: CalUtilError.self) { try ListOptions.parse(["--days", "a week"]) }
+        #expect(throws: CalUtilError.self) { try ListOptions.parse(["--save"]) }
+    }
+
+    let monday = utc("2026-11-01T23:00:00Z")  // Mon 2 Nov 00:00 in Copenhagen
+
+    func event(_ title: String, _ start: String, _ end: String, calendar: String = "Home",
+               allDay: Bool = false, zone: TimeZone? = copenhagen, alarms: [Alarm] = []) -> ListedEvent {
+        ListedEvent(title: title, calendar: calendar, calendarFullName: "iCloud/\(calendar)",
+                    start: utc(start), end: utc(end), isAllDay: allDay, timeZone: allDay ? nil : zone,
+                    alarms: alarms, identifier: "id-\(title)")
+    }
+
+    func render(_ events: [ListedEvent], days: Int = 1, verbose: Bool = false) -> String {
+        EventList.render(events, from: monday, days: days, timeZone: copenhagen, now: now, verbose: verbose)
+    }
+
+    @Test func oneDay() {
+        let text = render([
+            event("Dinner", "2026-11-02T18:00:00Z", "2026-11-02T20:00:00Z", calendar: "Family", alarms: [.beforeStart(seconds: 86_400)]),
+            event("Standup", "2026-11-02T08:00:00Z", "2026-11-02T08:15:00Z", calendar: "Work"),
+            event("Holiday", "2026-11-01T23:00:00Z", "2026-11-02T22:59:59Z", allDay: true),
+            event("Concert", "2026-11-02T07:00:00Z", "2026-11-02T10:00:00Z", zone: sydney, alarms: [.beforeStart(seconds: 7_200), .at(utc("2026-11-02T06:00:00Z"))]),
+        ])
+        #expect(text == """
+        Mon 2 Nov 2026 (tomorrow)
+          all day      Holiday  Home
+          08:00–11:00  Concert  Home    (18:00 Australia/Sydney)  ⏰ 2h, at 07:00
+          09:00–09:15  Standup  Work
+          19:00–21:00  Dinner   Family  ⏰ 1d
+        """)
+    }
+
+    @Test func emptyAndMultiDay() {
+        #expect(render([]) == "Mon 2 Nov 2026 (tomorrow)\n  No events.")
+        #expect(render([], days: 7) == "No events from Mon 2 Nov 2026 to Sun 8 Nov 2026.")
+        // Overnight event shows on both days; the empty day in between is left out.
+        let text = render([
+            event("Party", "2026-11-02T21:00:00Z", "2026-11-03T01:00:00Z"),
+            event("Trip", "2026-11-04T09:00:00Z", "2026-11-04T10:00:00Z"),
+        ], days: 3)
+        #expect(text == """
+        Mon 2 Nov 2026 (tomorrow)
+          22:00–…      Party  Home
+
+        Tue 3 Nov 2026
+          …–02:00      Party  Home
+
+        Wed 4 Nov 2026
+          10:00–11:00  Trip   Home
+        """)
+    }
+
+    @Test func verbose() {
+        var e = event("Dinner", "2026-11-02T18:00:00Z", "2026-11-02T20:00:00Z")
+        e.location = "Mum's"
+        e.notes = "Bring wine\nand dessert"
+        e.isRecurring = true
+        let text = render([e], verbose: true)
+        #expect(text.contains("\n               where     Mum's\n"))
+        #expect(text.contains("\n               repeats   yes\n"))
+        #expect(text.contains("\n               calendar  iCloud/Home\n"))
+        #expect(text.contains("\n               id        id-Dinner\n"))
+        #expect(text.hasSuffix("\n               notes     Bring wine\n                         and dessert"))
+    }
+}

@@ -915,3 +915,95 @@ let concert = Template(name: "concert", notes: "Bring tickets", calendar: "Perso
         #expect(text.contains("⏰ 1w, 2d, at 18:00, 15m after"))
     }
 }
+
+@Suite struct SearchTests {
+    let sydney = TimeZone(identifier: "Australia/Sydney")!
+    let dvorak = ListedEvent(title: "Dvořák’s Symphony of the World", calendar: "Home", calendarFullName: "iCloud/Home",
+                             start: utc("2027-06-12T09:00:00Z"), end: utc("2027-06-12T11:00:00Z"),
+                             location: "Sydney Opera House\nBennelong Point, Sydney NSW 2000, Australia",
+                             notes: "Row K")
+    let dentist = ListedEvent(title: "Dentist", calendar: "Home", calendarFullName: "iCloud/Home",
+                              start: utc("2026-12-01T22:00:00Z"), end: utc("2026-12-01T23:00:00Z"))
+
+    func options(_ args: [String]) throws -> SearchOptions { try SearchOptions.parse(args) }
+
+    @Test func parsing() throws {
+        let o = try options(["new", "world", "--location", " opera ", "--from", "2026-01-01", "--to", "today",
+                             "--calendar", "Home", "--calendar", "Family", "-v"])
+        #expect(o.text == "new world")
+        #expect(o.location == "opera")
+        #expect(o.from == "2026-01-01" && o.to == "today")
+        #expect(o.calendars == ["Home", "Family"])
+        #expect(o.verbose)
+        #expect(try Invocation.parse(["search", "dvorak"]) == .search(try options(["dvorak"])))
+        #expect(try Invocation.parse(["search", "--help"]) == .help("search"))
+        #expect(throws: CalUtilError.self) { try options([]) }
+        #expect(throws: CalUtilError.self) { try options(["--title", " "]) }
+        #expect(throws: CalUtilError.self) { try options(["x", "--days", "3"]) }
+        #expect(Help.text(for: "search") != nil)
+    }
+
+    @Test func matching() throws {
+        func finds(_ args: [String], _ event: ListedEvent) throws -> Bool { EventSearch.matches(event, try options(args)) }
+        #expect(try finds(["dvorak"], dvorak))
+        #expect(try finds(["DVORAK'S"], dvorak))                 // straight quote finds the curly one
+        #expect(try finds(["symphony", "dvořák"], dvorak))      // words in any order
+        #expect(try finds(["opera", "house", "bennelong"], dvorak))  // across the location's lines
+        #expect(try finds(["dvorak", "bennelong", "row"], dvorak))   // title, location and notes together
+        #expect(try finds(["--title", "world", "--location", "opera"], dvorak))
+        #expect(!(try finds(["--title", "opera"], dvorak)))      // the opera house is the location
+        #expect(!(try finds(["dvorak", "--notes", "row j"], dvorak)))
+        #expect(!(try finds(["mahler"], dvorak)))
+        #expect(!(try finds(["--location", "opera"], dentist)))  // no location at all
+    }
+
+    @Test func range() throws {
+        let now = utc("2026-11-07T01:00:00Z")  // Sat 7 Nov 2026 12:00 in Sydney
+        let year = try EventSearch.range(try options(["x"]), now: now, timeZone: sydney)
+        #expect(year.first == utc("2026-11-06T13:00:00Z"))   // today, from midnight
+        #expect(year.end == utc("2027-11-06T13:00:00Z"))     // to the same day next year
+        #expect(year.days == 365)
+
+        let back = try EventSearch.range(try options(["x", "--from", "2025-01-01", "--to", "2025-01-31"]),
+                                         now: now, timeZone: sydney)
+        #expect(back.days == 31)
+        let oneDay = try EventSearch.range(try options(["x", "--from", "today", "--to", "today"]), now: now, timeZone: sydney)
+        #expect(oneDay.days == 1)
+
+        let backwards = try options(["x", "--to", "2026-01-01"])
+        #expect(throws: CalUtilError.self) { try EventSearch.range(backwards, now: now, timeZone: sydney) }
+        #expect(throws: CalUtilError.self) {
+            try EventSearch.range(try options(["x", "--from", "1900-01-01", "--to", "2026-01-01"]), now: now, timeZone: sydney)
+        }
+        #expect(throws: CalUtilError.self) {
+            try EventSearch.range(try options(["x", "--from", "someday"]), now: now, timeZone: sydney)
+        }
+    }
+
+    @Test func windowsStayUnderEventKitsLimit() {
+        let calendar = DateParsing.gregorian(sydney)
+        let first = utc("2016-01-01T00:00:00Z"), end = utc("2026-06-01T00:00:00Z")
+        let windows = EventSearch.windows(from: first, to: end, calendar: calendar)
+        #expect(windows.count == 4)
+        #expect(windows.first?.start == first && windows.last?.end == end)
+        #expect(zip(windows, windows.dropFirst()).allSatisfy { $0.end == $1.start })
+        #expect(windows.allSatisfy { $0.end.timeIntervalSince($0.start) < 4 * 365 * 86_400 })
+    }
+
+    @Test func rendering() throws {
+        let now = utc("2026-11-07T01:00:00Z")
+        let o = try options(["dvorak"])
+        let r = try EventSearch.range(o, now: now, timeZone: sydney)
+        let text = EventSearch.render([dvorak, dentist], options: o, first: r.first, end: r.end, days: r.days,
+                                      timeZone: sydney, now: now)
+        #expect(text == """
+            Sat 12 Jun 2027
+              19:00–21:00  Dvořák’s Symphony of the World  Home
+
+            1 event matching 'dvorak' from Sat 7 Nov 2026 to Sat 6 Nov 2027.
+            """)
+        let none = EventSearch.render([dentist], options: try options(["mahler", "--location", "town hall"]),
+                                      first: r.first, end: r.end, days: r.days, timeZone: sydney, now: now)
+        #expect(none == "No events matching 'mahler', location 'town hall' from Sat 7 Nov 2026 to Sat 6 Nov 2027.")
+    }
+}

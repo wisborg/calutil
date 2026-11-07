@@ -1,12 +1,13 @@
 # calutil
 
 Work with Apple Calendar from the command line: add events (using templates for the ones you
-add often), see what's on, and look at your calendars.
+add often), see what's on, find events, and look at your calendars.
 
 ```
 calutil add --template concert --title "Beethoven's 9th" --location "Sydney Opera House" \
             --start 2026-11-06T18:00 --add-alarm 15m
 calutil list tomorrow
+calutil search dvorak
 calutil calendars --verbose
 ```
 
@@ -14,6 +15,7 @@ calutil calendars --verbose
 |-------------|-----------------------------------------------------------------|
 | `add`       | Add an event (a dry run unless you pass `--save` or `--open`)   |
 | `list`      | Show the events on a day, or over several days                  |
+| `search`    | Find events by title, location or notes                         |
 | `calendars` | List your calendars; `--verbose` adds ids, colours and contents |
 | `templates` | List the templates for `add`                                    |
 | `help`      | `calutil help <command>` shows every option of a command        |
@@ -43,7 +45,7 @@ make install-templates    # copies templates.example.json to ~/.config/calutil/t
 
 ## Calendar access
 
-The first `calutil add --save`, `calutil list` or `calutil calendars` asks macOS for access to your calendars. Choose
+The first `calutil add --save`, `calutil list`, `calutil search` or `calutil calendars` asks macOS for access to your calendars. Choose
 **Allow Full Access**: calutil needs to read your calendar list so it can find calendars by
 name.
 
@@ -115,6 +117,21 @@ days without events are left out. `--calendar` takes the same names and ids as `
 name shared by several calendars includes all of them. Titles longer than 40 characters are
 shortened with `…`. `--verbose` adds the full title, the event's time zone, location, URL,
 notes, the full calendar name and the event id.
+
+## Searching
+
+```
+calutil search dvorak                         # from today to a year ahead
+calutil search new world --location opera
+calutil search --title concert --from 2025-01-01 --to 2025-12-31 --calendar Home
+```
+
+Every word must appear in the title, location or notes (in any of them, in any order);
+`--title`, `--location` and `--notes` look in one field only, and everything given must match.
+Case, accents and curly quotes don't matter, so `dvorak's` finds "Dvořák’s". The search covers
+today to a year ahead unless you give `--from` and `--to` (both take the same days as `list`).
+Matches are shown as `list` shows them, followed by how many there were; a repeating event
+shows each time it occurs.
 
 ## Templates
 

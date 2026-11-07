@@ -6,6 +6,7 @@ public enum Help {
         case nil: general
         case "add": add
         case "list": list
+        case "search": search
         case "calendars": calendars
         case "templates": templates
         case "help": general
@@ -23,6 +24,7 @@ public enum Help {
     COMMANDS
       add          Add an event (a dry run unless you pass --save or --open)
       list         Show the events on a day, or over several days
+      search       Find events by title, location or notes
       calendars    List your calendars
       templates    List the event templates for 'add'
       help [CMD]   Show help, for one command if given
@@ -34,6 +36,7 @@ public enum Help {
       calutil add --template concert --title "Beethoven's 9th" --start 2026-11-28 --save
       calutil list tomorrow
       calutil list 2026-12-20 --days 14 --calendar Home
+      calutil search dvorak
     """
 
     static let add = """
@@ -126,6 +129,36 @@ public enum Help {
     EXAMPLE
       calutil add --template concert --title "Beethoven's 9th" --location "Sydney Opera House" \\
                   --start 2026-11-06T18:00 --timezone Australia/Sydney --add-alarm 15m --save
+    """
+
+    static let search = """
+    calutil search: find events by title, location or notes
+
+    USAGE
+      calutil search [TEXT...] [--title T] [--location L] [--notes N]
+                     [--from DAY] [--to DAY] [--calendar NAME]... [--verbose]
+
+      Every word of TEXT must appear in the event's title, location or notes (any mix of
+      them). --title, --location and --notes look in that field only. When several are
+      given, all must match. Case and accents don't matter: dvorak finds Dvořák.
+
+      Matches are shown as 'calutil list' shows events, grouped by day. A repeating event
+      shows each time it occurs.
+
+    OPTIONS
+      --from DAY           First day to search (default: today). To search back in time,
+                           give an earlier day, e.g. --from 2025-01-01.
+      --to DAY             Last day to search (default: a year after --from)
+      --calendar NAME      Only this calendar; repeat for more (default: all)
+      -v, --verbose        Also show the full title, time zone, location, notes, URL,
+                           calendar and event id
+
+      DAY is as for 'calutil list': today, tomorrow, yesterday, a weekday or a date.
+
+    EXAMPLES
+      calutil search dvorak
+      calutil search --location "opera house" --from 2026-01-01 --to 2027-12-31
+      calutil search concert --calendar Home --verbose
     """
 
     static let list = """

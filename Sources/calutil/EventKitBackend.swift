@@ -258,30 +258,55 @@ enum EventKitBackend {
         let store = try authorizedStore()
         let calendars = options.calendars.isEmpty ? nil : try calendarsToRead(options.calendars, in: store)
         let predicate = store.predicateForEvents(withStart: first, end: end, calendars: calendars)
-        let events = store.events(matching: predicate).map { event in
-            ListedEvent(
-                title: trimmedNonEmpty(event.title) ?? "(no title)",
-                calendar: event.calendar?.title ?? "?",
-                calendarFullName: event.calendar.map(qualifiedName) ?? "?",
-                start: event.startDate,
-                end: event.endDate,
-                isAllDay: event.isAllDay,
-                timeZone: event.timeZone,
-                location: trimmedNonEmpty(event.location),
-                place: event.structuredLocation?.geoLocation.map {
-                    Place(latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude)
-                },
-                notes: trimmedNonEmpty(event.notes),
-                url: event.url,
-                alarms: (event.alarms ?? []).map { alarm in
-                    if let date = alarm.absoluteDate { return .at(date) }
-                    return .beforeStart(seconds: Int(-alarm.relativeOffset))
-                },
-                isRecurring: event.hasRecurrenceRules,
-                identifier: event.eventIdentifier)
-        }
+        let events = store.events(matching: predicate).map(listed)
         return EventList.render(events, from: first, days: options.days, timeZone: zone, now: now,
                                 verbose: options.verbose)
+    }
+
+    static func searchEvents(_ options: SearchOptions) throws -> String {
+        let zone = TimeZone.current
+        let calendar = DateParsing.gregorian(zone)
+        let now = Date()
+        // Check the input before asking for Calendar access.
+        let range = try EventSearch.range(options, now: now, timeZone: zone)
+
+        let store = try authorizedStore()
+        let calendars = options.calendars.isEmpty ? nil : try calendarsToRead(options.calendars, in: store)
+        // An event that spans two windows comes back from both; keep it once.
+        var seen: Set<String> = []
+        var events: [ListedEvent] = []
+        for window in EventSearch.windows(from: range.first, to: range.end, calendar: calendar) {
+            let predicate = store.predicateForEvents(withStart: window.start, end: window.end, calendars: calendars)
+            for event in store.events(matching: predicate) {
+                let key = "\(event.eventIdentifier ?? UUID().uuidString)|\(event.startDate.timeIntervalSince1970)"
+                if seen.insert(key).inserted { events.append(listed(event)) }
+            }
+        }
+        return EventSearch.render(events, options: options, first: range.first, end: range.end,
+                                  days: range.days, timeZone: zone, now: now)
+    }
+
+    static func listed(_ event: EKEvent) -> ListedEvent {
+        ListedEvent(
+            title: trimmedNonEmpty(event.title) ?? "(no title)",
+            calendar: event.calendar?.title ?? "?",
+            calendarFullName: event.calendar.map(qualifiedName) ?? "?",
+            start: event.startDate,
+            end: event.endDate,
+            isAllDay: event.isAllDay,
+            timeZone: event.timeZone,
+            location: trimmedNonEmpty(event.location),
+            place: event.structuredLocation?.geoLocation.map {
+                Place(latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude)
+            },
+            notes: trimmedNonEmpty(event.notes),
+            url: event.url,
+            alarms: (event.alarms ?? []).map { alarm in
+                if let date = alarm.absoluteDate { return .at(date) }
+                return .beforeStart(seconds: Int(-alarm.relativeOffset))
+            },
+            isRecurring: event.hasRecurrenceRules,
+            identifier: event.eventIdentifier)
     }
 
 }

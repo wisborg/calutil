@@ -4,13 +4,14 @@ import Foundation
 public enum Invocation: Equatable, Sendable {
     case add(AddOptions)
     case list(ListOptions)
+    case search(SearchOptions)
     case calendars(verbose: Bool)
     case templates(path: String?, json: Bool)
     /// Help, for one command when given.
     case help(String?)
     case version
 
-    public static let commands = ["add", "list", "calendars", "templates", "help", "version"]
+    public static let commands = ["add", "list", "search", "calendars", "templates", "help", "version"]
 
     public static func parse(_ arguments: [String]) throws -> Invocation {
         guard let command = arguments.first else { return .help(nil) }
@@ -31,6 +32,8 @@ public enum Invocation: Equatable, Sendable {
             return try helpOr("add") { .add(try AddOptions.parse(rest)) }
         case "list":
             return try helpOr("list") { .list(try ListOptions.parse(rest)) }
+        case "search":
+            return try helpOr("search") { .search(try SearchOptions.parse(rest)) }
         case "calendars":
             return try helpOr("calendars") {
                 var scanner = ArgumentScanner(rest, command: command)

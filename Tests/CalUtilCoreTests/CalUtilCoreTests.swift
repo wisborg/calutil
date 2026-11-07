@@ -902,3 +902,16 @@ let concert = Template(name: "concert", notes: "Bring tickets", calendar: "Perso
         #expect(TemplateStore.json(file).contains(#""map" : "1,2""#))
     }
 }
+
+@Suite struct ListAlarmOrderTests {
+    @Test func alarmsAreListedInTheOrderTheyGoOff() {
+        let start = utc("2027-06-12T09:00:00Z")
+        let event = ListedEvent(title: "Dvořák", calendar: "Home", calendarFullName: "iCloud/Home",
+                                start: start, end: start.addingTimeInterval(7_200),
+                                alarms: [.beforeStart(seconds: 2 * 86_400), .beforeStart(seconds: -900),
+                                         .at(start.addingTimeInterval(-3_600)), .beforeStart(seconds: 7 * 86_400)])
+        let text = EventList.render([event], from: utc("2027-06-11T14:00:00Z"), days: 1,
+                                    timeZone: TimeZone(identifier: "Australia/Sydney")!, now: now, verbose: false)
+        #expect(text.contains("⏰ 1w, 2d, at 18:00, 15m after"))
+    }
+}

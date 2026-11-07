@@ -52,11 +52,13 @@ public enum EventList {
     public static func render(_ events: [ListedEvent], from firstDay: Date, days: Int,
                               timeZone zone: TimeZone, now: Date, verbose: Bool) -> String {
         let calendar = DateParsing.gregorian(zone)
-        // A title must fit on its row.
+        // A title must fit on its row. Alarms are shown in the order they go off, as `add` does
+        // (Calendar returns them in no particular order).
         let events = events.map { event in
             var event = event
             event.title = event.title.lines
                 .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }.joined(separator: " ")
+            event.alarms.sort { $0.fireDate(eventStart: event.start) < $1.fireDate(eventStart: event.start) }
             return event
         }
 

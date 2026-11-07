@@ -96,7 +96,8 @@ extension EventKitBackend {
         }
 
         let count = planned.count == 1 ? "1 event" : "\(planned.count) events"
-        print("\(options.save ? "Changing" : "Would change") \(count) of the \(matches.count) matching \(what)\n")
+        let of = matches.count == 1 ? "the 1 event" : "the \(matches.count) events"
+        print("\(options.save ? "Changing" : "Would change") \(planned.count) of \(of) matching \(what)\n")
         print(blocks.joined(separator: "\n\n"))
         var notes: [String] = []
         if unchanged > 0 { notes.append("\(unchanged) already as asked") }

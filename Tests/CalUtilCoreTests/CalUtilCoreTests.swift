@@ -378,6 +378,21 @@ let concert = Template(name: "concert", notes: "Bring tickets", calendar: "Perso
         #expect(text.contains("1 day before    Thu 5 Nov 2026 18:00"))
         #expect(text.contains("2 hours before  Fri 6 Nov 2026 16:00"))
     }
+
+    @Test func multiLineValuesStayIndented() throws {
+        let e = try resolve(["--title", "x", "--start", "2026-11-06T18:00", "--no-alarms",
+                             "--location", "Sydney Opera House\nBennelong Point, Sydney NSW 2000, Australia",
+                             "--notes", "Row K\r\nSeats 12–13"], local: copenhagen)
+        let text = Summary.render(e, localTimeZone: copenhagen)
+        #expect(text.contains("""
+            Location   Sydney Opera House
+                       Bennelong Point, Sydney NSW 2000, Australia
+            """))
+        #expect(text.contains("""
+            Notes      Row K
+                       Seats 12–13
+            """))
+    }
 }
 
 // `now` is Sun 1 Nov 2026, 01:00 in Copenhagen.

@@ -49,16 +49,15 @@ public enum Summary {
         }
 
         if let url = event.url { rows.append(("URL", url.absoluteString)) }
-        if let notes = event.notes {
-            for (index, line) in notes.lines.enumerated() {
-                rows.append((index == 0 ? "Notes" : "", line))
-            }
-        }
+        if let notes = event.notes { rows.append(("Notes", notes)) }
         if let template = event.templateName { rows.append(("Template", template)) }
 
+        // Values can span lines (a location with its address, notes); keep them indented.
         let width = rows.map(\.label.count).max() ?? 0
-        return rows.map { row in
-            row.label.padded(to: width) + "  " + row.value
+        return rows.flatMap { row in
+            row.value.lines.enumerated().map { index, line in
+                (index == 0 ? row.label : "").padded(to: width) + "  " + line
+            }
         }.joined(separator: "\n")
     }
 

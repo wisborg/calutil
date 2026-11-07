@@ -2,8 +2,8 @@
 // JSON with comments and trailing commas allowed. Every setting is optional,
 // and anything given on the command line wins.
 //
-// Settings: title, location, notes, url, calendar, timezone, time, duration,
-//           allDay, alarms
+// Settings: title, location, map, notes, url, calendar, timezone, time,
+//           duration, allDay, alarms
 // Alarms:   "15m", "2h", "1d", "1w", "1h30m" before the start ("0" = at the start),
 //           "09:00" on the day of the event, or "2026-11-05T09:00" at that moment.
 {

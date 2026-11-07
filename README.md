@@ -230,3 +230,7 @@ argument parsing, templates, dates, the summary, the event list and the iCalenda
 `Sources/calutil` is the executable and the EventKit code. `Sources/calutil/Info.plist` is
 linked into the binary, because macOS won't grant calendar access to a program that doesn't
 say why it wants it.
+
+## License
+
+Apache-2.0. See `LICENSE`.

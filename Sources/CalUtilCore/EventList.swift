@@ -14,6 +14,8 @@ public struct ListedEvent: Equatable, Sendable {
     /// The event's own zone; nil for floating events.
     public var timeZone: TimeZone?
     public var location: String?
+    /// Where the location is on the map, when the event has that.
+    public var place: Place?
     public var notes: String?
     public var url: URL?
     /// `.beforeStart` with a negative value means after the start.
@@ -23,7 +25,7 @@ public struct ListedEvent: Equatable, Sendable {
 
     public init(title: String, calendar: String, calendarFullName: String, start: Date, end: Date,
                 isAllDay: Bool = false, timeZone: TimeZone? = nil, location: String? = nil,
-                notes: String? = nil, url: URL? = nil, alarms: [Alarm] = [], isRecurring: Bool = false,
+                place: Place? = nil, notes: String? = nil, url: URL? = nil, alarms: [Alarm] = [], isRecurring: Bool = false,
                 identifier: String? = nil) {
         self.title = title
         self.calendar = calendar
@@ -33,6 +35,7 @@ public struct ListedEvent: Equatable, Sendable {
         self.isAllDay = isAllDay
         self.timeZone = timeZone
         self.location = location
+        self.place = place
         self.notes = notes
         self.url = url
         self.alarms = alarms
@@ -122,6 +125,7 @@ public enum EventList {
                         details.append(("zone", event.timeZone?.identifier ?? "none (floating: same clock time in any zone)"))
                     }
                     if let location = event.location { details.append(("where", location)) }
+                    if let place = event.place { details.append(("map", place.coordinates)) }
                     if let url = event.url { details.append(("url", url.absoluteString)) }
                     if event.isRecurring { details.append(("repeats", "yes")) }
                     details.append(("calendar", event.calendarFullName))

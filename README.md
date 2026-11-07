@@ -82,6 +82,12 @@ program and ask again.
   more than one. Alarms that would already be in the past (say, a template's `1w` for an
   event in two days) are left out, with a warning. An event that has already started keeps
   its alarms.
+* **Map:** the location is looked up in Apple Maps so Calendar shows a map (and can offer
+  "Alert when I need to leave"). The dry run lists the matches; pick another with
+  `--map-match 2`, search for other words with `--map "City Recital Hall"`, give coordinates
+  with `--map -33.8569,151.2153`, or skip it with `--no-map`. A location with its address
+  (`$'Sydney Opera House\nBennelong Point, Sydney NSW 2000, Australia'`) finds the right
+  place most reliably. `calutil list --verbose` shows an event's map point.
 * **Calendars:** `--calendar Personal`; if two accounts both have one with that name, use
   `--calendar "iCloud/Personal"`; if even that is ambiguous (e.g. several shared calendars
   called "Family"), use the id that `calutil calendars` shows next to each of them.

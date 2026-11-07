@@ -73,6 +73,7 @@ func needsCalendarAccess(_ invocation: Invocation) -> Bool {
     }
 }
 
+@MainActor
 func run() -> Int32 {
     do {
         let invocation = try Invocation.parse(Array(CommandLine.arguments.dropFirst()))
@@ -103,6 +104,7 @@ func run() -> Int32 {
     }
 }
 
+@MainActor
 func add(_ options: AddOptions) throws {
     var template: Template?
     if let name = options.template {
@@ -115,6 +117,7 @@ func add(_ options: AddOptions) throws {
     }
 
     var spec = try Resolver.resolve(options: options, template: template)
+    try MapSearch.resolve(&spec)
     if options.action == .openICS, spec.calendarName != nil {
         spec.warnings.append("--open can't choose the calendar; pick it in Calendar's import dialog")
     }
@@ -122,7 +125,7 @@ func add(_ options: AddOptions) throws {
 
     switch options.action {
     case .dryRun:
-        print(Summary.render(spec))
+        print(Summary.render(spec, listMatches: true))
         printError("\nDry run: nothing was added. Add --save to put it in Calendar, or --open to import it as an .ics file.")
     case .printICS:
         FileHandle.standardOutput.write(Data(ICS.render(spec).utf8))

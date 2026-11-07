@@ -24,6 +24,7 @@ let package = Package(
             exclude: ["Info.plist"],
             linkerSettings: [
                 .linkedFramework("EventKit"),
+                .linkedFramework("MapKit"),
                 .unsafeFlags([
                     "-Xlinker", "-sectcreate",
                     "-Xlinker", "__TEXT",

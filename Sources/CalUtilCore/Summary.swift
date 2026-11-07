@@ -2,13 +2,30 @@ import Foundation
 
 /// The human-readable description used by the dry run and after saving.
 public enum Summary {
-    public static func render(_ event: EventSpec, localTimeZone: TimeZone = .current) -> String {
+    /// `listMatches` lists every match of the map search, so another can be picked (dry run).
+    public static func render(_ event: EventSpec, localTimeZone: TimeZone = .current,
+                              listMatches: Bool = false) -> String {
         var rows: [(label: String, value: String)] = []
         let zone = event.timeZone
         let calendar = DateParsing.gregorian(zone)
 
         rows.append(("Title", event.title))
         if let location = event.location { rows.append(("Location", location)) }
+        if let place = event.place {
+            if listMatches && event.matches.count > 1 {
+                for (index, match) in event.matches.enumerated() {
+                    let chosen = match == place
+                    let text = "\(index + 1) \(chosen ? "✓" : " ")  \(match.description)"
+                        + (chosen ? "  (\(match.coordinates))" : "")
+                    rows.append((index == 0 ? "Map" : "", text))
+                }
+                rows.append(("", "pick another with --map-match N, or leave the map out with --no-map"))
+            } else {
+                let text = place.name == nil && place.address == nil
+                    ? place.coordinates : "\(place.description)  (\(place.coordinates))"
+                rows.append(("Map", text))
+            }
+        }
 
         if event.isAllDay {
             // The end is the start of the day after the last one.

@@ -43,6 +43,12 @@ public struct EventSpec: Equatable, Sendable {
     public var templateName: String?
     /// Things worth telling the user that don't stop the event being created.
     public var warnings: [String]
+    /// What to look up on the map; done by the caller, which then sets `place`.
+    public var map: MapRequest = .none
+    /// The point on the map for the location (shown as a map in Calendar).
+    public var place: Place?
+    /// All of the search's matches, `place` among them, for the dry run to list.
+    public var matches: [Place] = []
 }
 
 public enum Resolver {
@@ -216,9 +222,25 @@ public enum Resolver {
             warnings.append("the event starts in the past")
         }
 
+        // Map: --map's coordinates or search text, else the location text.
+        let location = pick(o.location, t?.location).value
+        var map = MapRequest.none
+        if !o.noMap {
+            if let text = nonEmpty(o.map), let place = Places.parseCoordinates(text) {
+                if o.mapMatch != nil {
+                    throw CalUtilError("--map-match picks a search match; --map \(text) is coordinates", usage: true)
+                }
+                map = .place(place)
+            } else if let text = nonEmpty(o.map) ?? location {
+                map = .search(Places.query(for: text), pick: o.mapMatch)
+            } else if o.mapMatch != nil {
+                throw CalUtilError("--map-match needs a --location or --map to search for", usage: true)
+            }
+        }
+
         return EventSpec(
             title: title,
-            location: pick(o.location, t?.location).value,
+            location: location,
             notes: pick(o.notes, t?.notes).value,
             url: url,
             calendarName: pick(o.calendar, t?.calendar).value,
@@ -228,7 +250,8 @@ public enum Resolver {
             end: end,
             alarms: alarms,
             templateName: t?.name,
-            warnings: warnings)
+            warnings: warnings,
+            map: map)
     }
 
     static func resolveEnd(_ text: String, start: Date, isAllDay: Bool, calendar: Calendar, now: Date) throws -> Date {

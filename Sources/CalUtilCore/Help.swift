@@ -84,6 +84,17 @@ public enum Help {
       For an event still ahead, alarms that would already be in the past are left out, with
       a warning. An event that has already started keeps its alarms.
 
+    MAP
+      The location is looked up in Apple Maps, so Calendar shows a map for it (and can offer
+      "Alert when I need to leave"). The dry run lists what was found; the first match named
+      like the location's first line is used, else the first match.
+
+      --map TEXT           Search for TEXT instead of the location. Without a --location, the
+                           place found gives it ("City Recital Hall" + its address).
+      --map LAT,LON        Use these coordinates, e.g. --map -33.8569,151.2153 (no search)
+      --map-match N        Use the Nth match the dry run lists
+      --no-map             Keep the location as text only
+
     OTHER
       --templates PATH     Template file (default: $CALUTIL_TEMPLATES, else
                            $XDG_CONFIG_HOME/calutil/templates.json, else

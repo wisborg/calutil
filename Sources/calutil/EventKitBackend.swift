@@ -64,6 +64,13 @@ enum EventKitBackend {
             case .at(let date): EKAlarm(absoluteDate: date)
             }
         }
+        if let place = spec.place {
+            // Its title becomes the location text, and changing that text afterwards would
+            // drop the map, so this comes last.
+            let structured = EKStructuredLocation(title: spec.location ?? place.locationText)
+            structured.geoLocation = CLLocation(latitude: place.latitude, longitude: place.longitude)
+            event.structuredLocation = structured
+        }
 
         do {
             try store.save(event, span: .thisEvent, commit: true)
@@ -261,6 +268,9 @@ enum EventKitBackend {
                 isAllDay: event.isAllDay,
                 timeZone: event.timeZone,
                 location: trimmedNonEmpty(event.location),
+                place: event.structuredLocation?.geoLocation.map {
+                    Place(latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude)
+                },
                 notes: trimmedNonEmpty(event.notes),
                 url: event.url,
                 alarms: (event.alarms ?? []).map { alarm in

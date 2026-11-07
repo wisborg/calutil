@@ -31,6 +31,16 @@ public enum ICS {
         }
         lines.append("SUMMARY:\(escape(event.title))")
         if let location = event.location { lines.append("LOCATION:\(escape(location))") }
+        if let place = event.place {
+            // GEO is the standard property; Calendar shows its map from Apple's own one.
+            let lat = String(format: "%.6f", place.latitude), lon = String(format: "%.6f", place.longitude)
+            lines.append("GEO:\(lat);\(lon)")
+            var structured = "X-APPLE-STRUCTURED-LOCATION;VALUE=URI"
+            if let address = place.address { structured += ";X-ADDRESS=\(parameter(address))" }
+            let title = Places.query(for: event.location ?? place.locationText)
+            structured += ";X-TITLE=\(parameter(title)):geo:\(lat),\(lon)"
+            lines.append(structured)
+        }
         if let notes = event.notes { lines.append("DESCRIPTION:\(escape(notes))") }
         if let url = event.url { lines.append("URL:\(url.absoluteString)") }
 
@@ -113,8 +123,11 @@ public enum ICS {
         return String(out)
     }
 
+    /// A parameter value, quoted when needed. Parameter values can't hold double quotes or
+    /// line breaks (RFC 5545 §3.1), so those become single quotes and spaces.
     static func parameter(_ value: String) -> String {
-        value.contains(where: { ":;,".contains($0) }) ? "\"\(value)\"" : value
+        let value = value.replacingOccurrences(of: "\"", with: "'").lines.joined(separator: " ")
+        return value.contains(where: { ":;,".contains($0) }) ? "\"\(value)\"" : value
     }
 
     static func stamp(_ date: Date, _ zone: TimeZone, time: Bool = true) -> String {

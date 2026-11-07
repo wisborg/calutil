@@ -144,6 +144,11 @@ public struct AddOptions: Equatable, Sendable {
     /// `--add-alarm` values; added to whatever alarms there are.
     public var addAlarms: [String] = []
     public var noAlarms = false
+    /// `--map`: search text or coordinates for the map, instead of the location text.
+    public var map: String?
+    /// `--map-match`: which of the search's matches to use (1-based).
+    public var mapMatch: Int?
+    public var noMap = false
 
     public init() {}
 
@@ -187,6 +192,15 @@ public struct AddOptions: Equatable, Sendable {
             case "--add-alarm": options.addAlarms.append(try scanner.value())
             case "--no-alarms": try scanner.flag(); options.noAlarms = true
 
+            case "--map": options.map = try scanner.single()
+            case "--map-match":
+                let text = try scanner.single()
+                guard let n = Int(text), (1...Places.maxMatches).contains(n) else {
+                    throw CalUtilError("--map-match takes a number from 1 to \(Places.maxMatches), not '\(text)'", usage: true)
+                }
+                options.mapMatch = n
+            case "--no-map": try scanner.flag(); options.noMap = true
+
             default:
                 if scanner.isOption { throw scanner.unexpected() }
                 throw CalUtilError(
@@ -197,6 +211,9 @@ public struct AddOptions: Equatable, Sendable {
 
         if options.noAlarms && options.alarms != nil {
             throw CalUtilError("--no-alarms and --alarm can't be combined (--alarm already replaces the template's alarms)", usage: true)
+        }
+        if options.noMap && (options.map != nil || options.mapMatch != nil) {
+            throw CalUtilError("--no-map can't be combined with --map or --map-match", usage: true)
         }
         return options
     }

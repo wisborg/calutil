@@ -766,3 +766,104 @@ let concert = Template(name: "concert", notes: "Bring tickets", calendar: "Perso
         #expect(!given.warnings.contains { $0.contains("duration") })
     }
 }
+
+@Suite struct MapTests {
+    let operaHouse = Place(name: "Sydney Opera House", address: "Bennelong Point, Sydney NSW 2000, Australia",
+                           latitude: -33.8568674, longitude: 151.2152855)
+    let carPark = Place(name: "Wilson Parking", address: "2A Macquarie St, Sydney NSW 2000, Australia",
+                        latitude: -33.8593064, longitude: 151.2135351)
+
+    @Test func coordinates() {
+        #expect(Places.parseCoordinates("-33.8569,151.2153") == Place(latitude: -33.8569, longitude: 151.2153))
+        #expect(Places.parseCoordinates(" -33.8569 , 151.2153 ") != nil)
+        for bad in ["Sydney Opera House", "-33.8569", "91,0", "0,181", "1,2,3", "1e3,2", ",", "a,b"] {
+            #expect(Places.parseCoordinates(bad) == nil, "\(bad)")
+        }
+        #expect(operaHouse.coordinates == "-33.8569, 151.2153")
+        #expect(operaHouse.locationText == "Sydney Opera House\nBennelong Point, Sydney NSW 2000, Australia")
+    }
+
+    @Test func bestMatchPrefersTheName() {
+        #expect(Places.query(for: "Sydney Opera House\n Bennelong Point ") == "Sydney Opera House, Bennelong Point")
+        #expect(Places.bestMatch([carPark, operaHouse], for: "sydney opera house") == 1)
+        #expect(Places.bestMatch([carPark, operaHouse], for: "Sydney Opera House, Bennelong Point") == 1)
+        #expect(Places.bestMatch([carPark, operaHouse], for: "2A Macquarie St") == 0)
+        let cafe = Place(name: "Café Sydney", latitude: 0, longitude: 0)
+        #expect(Places.bestMatch([carPark, cafe], for: "Cafe Sydney") == 1)
+    }
+
+    @Test func choosing() throws {
+        var event = try resolve(["--title", "x", "--start", "2026-11-20T19:00", "--location", "Sydney Opera House"])
+        try Places.choose(from: [carPark, operaHouse], query: "Sydney Opera House", pick: nil, for: &event)
+        #expect(event.place == operaHouse)
+        #expect(event.location == "Sydney Opera House")  // the given text is kept
+        try Places.choose(from: [carPark, operaHouse], query: "Sydney Opera House", pick: 1, for: &event)
+        #expect(event.place == carPark)
+        #expect(throws: CalUtilError.self) {
+            try Places.choose(from: [carPark, operaHouse], query: "Sydney Opera House", pick: 3, for: &event)
+        }
+        #expect(throws: CalUtilError.self) {
+            try Places.choose(from: [], query: "Sydney Opera House", pick: 1, for: &event)
+        }
+
+        var plain = try resolve(["--title", "x", "--start", "2026-11-20T19:00", "--location", "Nowhere"])
+        try Places.choose(from: [], query: "Nowhere", pick: nil, for: &plain)
+        #expect(plain.place == nil)
+        #expect(plain.warnings.contains { $0.hasPrefix("nothing found on the map for 'Nowhere'") })
+
+        // With --map and no --location, the place gives the location text.
+        var found = try resolve(["--title", "x", "--start", "2026-11-20T19:00", "--map", "Sydney Opera House"])
+        try Places.choose(from: [operaHouse], query: "Sydney Opera House", pick: nil, for: &found)
+        #expect(found.location == "Sydney Opera House\nBennelong Point, Sydney NSW 2000, Australia")
+    }
+
+    @Test func whatToLookUp() throws {
+        let base = ["--title", "x", "--start", "2026-11-20T19:00"]
+        #expect(try resolve(base).map == .none)
+        #expect(try resolve(base + ["--location", "Sydney Opera House\nBennelong Point"]).map
+                == .search("Sydney Opera House, Bennelong Point", pick: nil))
+        #expect(try resolve(base + ["--location", "Home", "--map", "City Recital Hall", "--map-match", "2"]).map
+                == .search("City Recital Hall", pick: 2))
+        #expect(try resolve(base + ["--location", "Home", "--map", "-33.8569, 151.2153"]).map
+                == .place(Place(latitude: -33.8569, longitude: 151.2153)))
+        #expect(try resolve(base + ["--location", "Home", "--no-map"]).map == .none)
+        // A template's location is looked up too.
+        #expect(try resolve(base, template: Template(name: "t", location: "Hall")).map == .search("Hall", pick: nil))
+
+        #expect(throws: CalUtilError.self) { try resolve(base + ["--map-match", "1"]) }
+        #expect(throws: CalUtilError.self) { try resolve(base + ["--map", "-33.8569,151.2153", "--map-match", "1"]) }
+        #expect(throws: CalUtilError.self) { try AddOptions.parse(["--no-map", "--map", "Hall"]) }
+        #expect(throws: CalUtilError.self) { try AddOptions.parse(["--no-map", "--map-match", "1"]) }
+        #expect(throws: CalUtilError.self) { try AddOptions.parse(["--map-match", "0"]) }
+        #expect(throws: CalUtilError.self) { try AddOptions.parse(["--map-match", "6"]) }
+    }
+
+    @Test func summaryAndICS() throws {
+        var event = try resolve(["--title", "x", "--start", "2026-11-20T19:00", "--no-alarms",
+                                 "--location", "Sydney Opera House"], local: TimeZone(identifier: "Australia/Sydney")!)
+        try Places.choose(from: [carPark, operaHouse], query: "Sydney Opera House", pick: nil, for: &event)
+
+        let dryRun = Summary.render(event, localTimeZone: TimeZone(identifier: "Australia/Sydney")!, listMatches: true)
+        #expect(dryRun.contains("""
+            Map        1    Wilson Parking, 2A Macquarie St, Sydney NSW 2000, Australia
+                       2 ✓  Sydney Opera House, Bennelong Point, Sydney NSW 2000, Australia  (-33.8569, 151.2153)
+                       pick another with --map-match N
+            """))
+        let saved = Summary.render(event, localTimeZone: TimeZone(identifier: "Australia/Sydney")!)
+        #expect(saved.contains("Map        Sydney Opera House, Bennelong Point, Sydney NSW 2000, Australia  (-33.8569, 151.2153)\n"))
+
+        let ics = ICS.render(event, uid: "u", now: now).replacingOccurrences(of: "\r\n ", with: "")
+        #expect(ics.contains("GEO:-33.856867;151.215285\r\n"))
+        #expect(ics.contains("X-APPLE-STRUCTURED-LOCATION;VALUE=URI;X-ADDRESS=\"Bennelong Point, Sydney NSW 2000, Australia\";X-TITLE=Sydney Opera House:geo:-33.856867,151.215285\r\n"))
+        #expect(ICS.parameter("Say \"hi\"\nthere; now") == "\"Say 'hi' there; now\"")
+    }
+
+    @Test func listShowsTheMapPoint() {
+        let event = ListedEvent(title: "Gig", calendar: "Home", calendarFullName: "iCloud/Home",
+                                start: utc("2026-11-20T08:00:00Z"), end: utc("2026-11-20T10:00:00Z"),
+                                location: "Sydney Opera House", place: operaHouse)
+        let text = EventList.render([event], from: utc("2026-11-19T13:00:00Z"), days: 1,
+                                    timeZone: TimeZone(identifier: "Australia/Sydney")!, now: now, verbose: true)
+        #expect(text.contains("map       -33.8569, 151.2153"))
+    }
+}

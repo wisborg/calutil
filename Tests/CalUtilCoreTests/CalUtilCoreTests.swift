@@ -670,3 +670,84 @@ let concert = Template(name: "concert", notes: "Bring tickets", calendar: "Perso
         """)
     }
 }
+
+/// Time-zone corner cases: a day that starts at 01:00 (Santiago), an explicit UTC time next
+/// to a daylight-saving change (London), and the Mac's own offset (Sydney).
+@Suite struct TimeZoneEdgeTests {
+    let santiago = TimeZone(identifier: "America/Santiago")!
+    let london = TimeZone(identifier: "Europe/London")!
+    let sydney = TimeZone(identifier: "Australia/Sydney")!
+
+    @Test func daysAreCountedByDate() throws {
+        let calendar = DateParsing.gregorian(santiago)
+        let sixth = try DateParsing.startOfDay(year: 2026, month: 9, day: 6, timeZone: santiago)  // 01:00
+        let seventh = DateParsing.startOfDay(1, after: sixth, calendar: calendar)                // 00:00
+        #expect(DateParsing.daysBetween(sixth, seventh, calendar: calendar) == 1)
+        #expect(DateParsing.daysBetween(seventh, sixth, calendar: calendar) == -1)
+        #expect(DateParsing.daysBetween(sixth, sixth.addingTimeInterval(3_600), calendar: calendar) == 0)
+    }
+
+    @Test func listLabelsTomorrowAfterADayStartingAt1() throws {
+        let sixth = try DateParsing.startOfDay(year: 2026, month: 9, day: 6, timeZone: santiago)
+        let noonOnSixth = utc("2026-09-06T15:00:00Z")
+        let events = [
+            ListedEvent(title: "A", calendar: "Home", calendarFullName: "iCloud/Home",
+                        start: utc("2026-09-06T16:00:00Z"), end: utc("2026-09-06T17:00:00Z")),
+            ListedEvent(title: "B", calendar: "Home", calendarFullName: "iCloud/Home",
+                        start: utc("2026-09-07T16:00:00Z"), end: utc("2026-09-07T17:00:00Z")),
+        ]
+        let text = EventList.render(events, from: sixth, days: 2, timeZone: santiago, now: noonOnSixth, verbose: false)
+        #expect(text.contains("Sun 6 Sep 2026 (today)"))
+        #expect(text.contains("Mon 7 Sep 2026 (tomorrow)"))
+    }
+
+    @Test func allDaySummaryCountsDaysByDate() throws {
+        let e = try resolve(["--title", "x", "--start", "2026-09-06", "--duration", "3d", "--all-day"], local: santiago)
+        let text = Summary.render(e, localTimeZone: santiago)
+        #expect(text.contains("Sun 6 Sep 2026 – Tue 8 Sep 2026 (all day, 3 days)"))
+        let one = try resolve(["--title", "x", "--start", "2026-09-06", "--all-day"], local: santiago)
+        #expect(Summary.render(one, localTimeZone: santiago).contains("Sun 6 Sep 2026 (all day)"))
+    }
+
+    @Test func zMeansUTCEvenWhenItIsTheLocalOffset() throws {
+        // London is on UTC until 01:00 UTC on 29 Mar 2026, then on UTC+1.
+        let e = try resolve(["--title", "x", "--start", "2026-03-28T23:00Z", "--end", "02:00"], local: london)
+        #expect(ICS.isUTC(e.timeZone))
+        #expect(e.end.timeIntervalSince(e.start) == 3 * 3_600)
+        let ics = ICS.render(e, uid: "u", now: now)
+        #expect(ics.contains("DTSTART:20260328T230000Z"))
+        #expect(!ics.contains("TZID=Europe/London"))
+    }
+
+    @Test func theMacsOwnOffsetKeepsItsNamedZone() throws {
+        let e = try resolve(["--title", "x", "--start", "2026-11-20T19:00+11:00"], local: sydney)
+        #expect(e.timeZone.identifier == "Australia/Sydney")
+        let other = try resolve(["--title", "x", "--start", "2026-11-20T19:00+10:00"], local: sydney)
+        #expect(other.timeZone.secondsFromGMT() == 36_000)
+    }
+
+    @Test func aRolledOverEndInADaylightSavingGapIsAnError() throws {
+        // 00:30 on 6 Sep doesn't exist in Santiago.
+        #expect(throws: CalUtilError.self) {
+            try resolve(["--title", "x", "--start", "2026-09-05T23:00", "--end", "00:30"], local: santiago)
+        }
+        // From 01:30 on the 6th, 00:30 is on the 7th, which exists.
+        let e = try resolve(["--title", "x", "--start", "2026-09-06T01:30", "--end", "00:30"], local: santiago)
+        #expect(e.end == utc("2026-09-07T03:30:00Z"))
+        // Later on the clock than the start: the same day.
+        let same = try resolve(["--title", "x", "--start", "2026-09-06T18:00", "--end", "21:00"], local: santiago)
+        #expect(same.end.timeIntervalSince(same.start) == 3 * 3_600)
+    }
+
+    @Test func aDroppedTemplateDurationIsWarnedAbout() throws {
+        let timed = Template(name: "gig", duration: "3h")
+        let allDay = try resolve(["--title", "x", "--start", "2026-11-20", "--all-day"], template: timed)
+        #expect(allDay.warnings.contains { $0.contains("ignored the template's duration 3h") })
+        let trip = Template(name: "trip", duration: "3d", allDay: true)
+        let notAllDay = try resolve(["--title", "x", "--start", "2026-11-20T09:00", "--no-all-day"], template: trip)
+        #expect(notAllDay.warnings.contains { $0.contains("ignored the template's duration 3d") })
+        // No warning when the command line sets the length anyway.
+        let given = try resolve(["--title", "x", "--start", "2026-11-20", "--all-day", "--duration", "2d"], template: timed)
+        #expect(!given.warnings.contains { $0.contains("duration") })
+    }
+}

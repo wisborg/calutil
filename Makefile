@@ -1,9 +1,5 @@
 PREFIX ?= $(HOME)/.local
 BINDIR := $(PREFIX)/bin
-# The same place calutil looks: $CALUTIL_TEMPLATES, else $XDG_CONFIG_HOME/calutil, else ~/.config/calutil.
-CONFIG_HOME := $(or $(XDG_CONFIG_HOME),$(HOME)/.config)
-# A leading ~ is expanded, as calutil does, in case the variable was set with it quoted.
-TEMPLATES := $(patsubst ~/%,$(HOME)/%,$(or $(CALUTIL_TEMPLATES),$(CONFIG_HOME)/calutil/templates.json))
 
 .PHONY: build test install install-templates uninstall clean
 
@@ -20,14 +16,19 @@ install: build
 	@# This tool used to be called cal-add.
 	@if [ -e "$(BINDIR)/cal-add" ]; then rm -f "$(BINDIR)/cal-add" && echo "Removed the old $(BINDIR)/cal-add"; fi
 
-# Copies the example templates, but never over an existing file.
+# Copies the example templates, but never over an existing file. Uses the same place
+# calutil looks: $CALUTIL_TEMPLATES, else $XDG_CONFIG_HOME/calutil, else ~/.config/calutil.
+# Worked out in the shell so the path is used exactly as given; a leading ~ is expanded,
+# as calutil does, in case the variable was set with it quoted.
 install-templates:
-	@if [ -e "$(TEMPLATES)" ]; then \
-		echo "$(TEMPLATES) already exists; leaving it alone"; \
+	@t="$${CALUTIL_TEMPLATES:-$${XDG_CONFIG_HOME:-$$HOME/.config}/calutil/templates.json}"; \
+	case "$$t" in "~") t="$$HOME" ;; "~/"*) t="$$HOME/$${t#"~/"}" ;; esac; \
+	if [ -e "$$t" ]; then \
+		echo "$$t already exists; leaving it alone"; \
 	else \
-		install -d "$(dir $(TEMPLATES))" && \
-		install -m 644 templates.example.json "$(TEMPLATES)" && \
-		echo "Installed $(TEMPLATES)"; \
+		install -d "$$(dirname "$$t")" && \
+		install -m 644 templates.example.json "$$t" && \
+		echo "Installed $$t"; \
 	fi
 
 uninstall:

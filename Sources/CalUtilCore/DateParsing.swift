@@ -150,6 +150,17 @@ public enum DateParsing {
         calendar.startOfDay(for: calendar.date(byAdding: .day, value: days, to: dayStart)!)
     }
 
+    /// How many days the day `to` is in comes after the day `from` is in, counted by date.
+    /// Counting hours instead goes wrong next to a day that starts at 01:00 (23 hours from
+    /// its start to the next midnight counts as 0 days).
+    public static func daysBetween(_ from: Date, _ to: Date, calendar: Calendar) -> Int {
+        let utc = gregorian(TimeZone(secondsFromGMT: 0)!)
+        func dayIn(_ date: Date) -> Date {
+            utc.date(from: calendar.dateComponents([.year, .month, .day], from: date))!
+        }
+        return utc.dateComponents([.day], from: dayIn(from), to: dayIn(to)).day!
+    }
+
     public static func makeDate(_ input: DateTimeInput, time: TimeOfDay, defaultTimeZone: TimeZone) throws -> Date {
         let zone = input.utcOffset.flatMap { TimeZone(secondsFromGMT: $0) } ?? defaultTimeZone
         return try makeDate(year: input.year, month: input.month, day: input.day, time: time, timeZone: zone)

@@ -11,8 +11,9 @@ public enum Summary {
         if let location = event.location { rows.append(("Location", location)) }
 
         if event.isAllDay {
-            let days = calendar.dateComponents([.day], from: event.start, to: event.end).day ?? 1
-            let lastDay = calendar.date(byAdding: .day, value: -1, to: event.end)!
+            // The end is the start of the day after the last one.
+            let days = DateParsing.daysBetween(event.start, event.end, calendar: calendar)
+            let lastDay = event.end.addingTimeInterval(-1)
             if days <= 1 {
                 rows.append(("Date", "\(format(event.start, zone, time: false)) (all day)"))
             } else {

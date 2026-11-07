@@ -75,7 +75,8 @@ program and ask again.
   day if it would otherwise be before the start).
 * **Time zones:** times are in this Mac's zone unless you pass `--timezone Australia/Sydney`
   (or end the time with `Z` or `+11:00`). The event keeps that zone in Calendar, and the dry run
-  shows your local time too.
+  shows your local time too. `Z` always means UTC; an offset that is this Mac's own at that
+  moment keeps the Mac's zone, so the event follows its daylight-saving rules.
 * **Alarms:** `15m`, `2h`, `1d`, `1w`, `1h30m` before the start (`0` = at the start); `09:00`
   on the day of the event; or `2026-11-05T09:00` at an exact moment. Repeat the option for
   more than one. Alarms that would already be in the past (say, a template's `1w` for an

@@ -49,7 +49,6 @@ public enum EventList {
     public static func render(_ events: [ListedEvent], from firstDay: Date, days: Int,
                               timeZone zone: TimeZone, now: Date, verbose: Bool) -> String {
         let calendar = DateParsing.gregorian(zone)
-        let today = calendar.startOfDay(for: now)
         // A title must fit on its row.
         let events = events.map { event in
             var event = event
@@ -94,7 +93,7 @@ public enum EventList {
         var blocks: [String] = []
         for section in sections {
             var header = Summary.format(section.day, zone, time: false)
-            let distance = calendar.dateComponents([.day], from: today, to: section.day).day ?? 99
+            let distance = DateParsing.daysBetween(now, section.day, calendar: calendar)
             if let word = [-1: "yesterday", 0: "today", 1: "tomorrow"][distance] { header += " (\(word))" }
             var lines = [header]
             if section.events.isEmpty { lines.append("  No events.") }
@@ -109,9 +108,9 @@ public enum EventList {
                     extras.append("⏰ " + event.alarms.map { describe($0, event: event, calendar: calendar) }.joined(separator: ", "))
                 }
                 let columns = [
-                    pad(timeRange(event, day: section.day, dayEnd: section.dayEnd, calendar: calendar), timeWidth),
-                    pad(shorten(event.title, to: titleWidth), titleWidth),
-                    extras.isEmpty ? event.calendar : pad(event.calendar, calendarWidth),
+                    timeRange(event, day: section.day, dayEnd: section.dayEnd, calendar: calendar).padded(to: timeWidth),
+                    shorten(event.title, to: titleWidth).padded(to: titleWidth),
+                    extras.isEmpty ? event.calendar : event.calendar.padded(to: calendarWidth),
                 ] + extras
                 lines.append("  " + columns.joined(separator: "  ").trimmingTrailingSpaces())
 
@@ -132,7 +131,7 @@ public enum EventList {
                     // Values can span lines (notes, and locations from Maps); keep them indented.
                     for (label, value) in details {
                         for (index, line) in value.lines.enumerated() {
-                            lines.append(indent + pad(index == 0 ? label : "", labelWidth) + "  " + line)
+                            lines.append(indent + (index == 0 ? label : "").padded(to: labelWidth) + "  " + line)
                         }
                     }
                 }
@@ -172,8 +171,6 @@ public enum EventList {
     static func shorten(_ text: String, to width: Int) -> String {
         text.count <= width ? text : String(text.prefix(width - 1)) + "…"
     }
-
-    static func pad(_ text: String, _ width: Int) -> String { text.padded(to: width) }
 }
 
 extension String {

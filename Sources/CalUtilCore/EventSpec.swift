@@ -105,14 +105,17 @@ public enum Resolver {
                 throw CalUtilError("--start needs a time, e.g. \(example) (or add --all-day)")
             }
             start = try DateParsing.makeDate(startInput, time: time, defaultTimeZone: timeZone)
-            // An offset typed in --start (Z, +11:00) decides the zone a bare --end time and HH:MM
-            // alarms are read in, unless --timezone names one. When it is this Mac's own offset
-            // at that moment, the Mac's named zone is kept, so the event follows its
-            // daylight-saving rules; otherwise the event gets the fixed offset.
-            if zone.value == nil, let offset = startInput.utcOffset,
-               localTimeZone.secondsFromGMT(for: start) != offset,
-               let fixed = TimeZone(secondsFromGMT: offset) {
-                timeZone = fixed
+            // An offset typed in --start decides the zone a bare --end time and HH:MM alarms are
+            // read in, unless --timezone names one. Z means UTC. A number that is this Mac's own
+            // offset at that moment (+11:00 in Sydney) keeps the Mac's named zone, so the event
+            // follows its daylight-saving rules; any other gets that fixed offset.
+            if zone.value == nil, let offset = startInput.utcOffset {
+                if startText.trimmingCharacters(in: .whitespaces).uppercased().hasSuffix("Z") {
+                    timeZone = TimeZone(secondsFromGMT: 0)!
+                } else if localTimeZone.secondsFromGMT(for: start) != offset,
+                          let fixed = TimeZone(secondsFromGMT: offset) {
+                    timeZone = fixed
+                }
             }
         }
         let calendar = DateParsing.gregorian(timeZone)
@@ -127,7 +130,12 @@ public enum Resolver {
         } else {
             // A template's duration only fits the kind of event it describes: a timed "2h30m"
             // doesn't suit --all-day, nor an all-day "3d" --no-all-day.
-            let templateDuration = o.end != nil || isAllDay != (t?.allDay ?? false) ? nil : t?.duration
+            let otherKind = isAllDay != (t?.allDay ?? false)
+            let templateDuration = o.end != nil || otherKind ? nil : t?.duration
+            if o.duration == nil, otherKind, let t, let ignored = nonEmpty(t.duration) {
+                let kind = isAllDay ? "an all-day event" : "a timed event"
+                warnings.append("ignored the template's duration \(ignored): it is for \(t.allDay ?? false ? "all-day" : "timed") events, and this is \(kind) (give --duration or --end)")
+            }
             let duration = pick(o.duration, templateDuration)
             let seconds = try inTemplate(duration.fromTemplate) {
                 try duration.value.map(Durations.parse)
@@ -240,12 +248,16 @@ public enum Resolver {
             }
             return try DateParsing.makeDate(input, time: time, defaultTimeZone: calendar.timeZone)
         }
-        // A bare time: on the start day, or the day after if that is not after the start.
-        let day = calendar.dateComponents([.year, .month, .day], from: start)
-        var end = try DateParsing.makeDate(year: day.year!, month: day.month!, day: day.day!,
-                                           time: time, timeZone: calendar.timeZone)
-        if end <= start { end = calendar.date(byAdding: .day, value: 1, to: end)! }
-        return end
+        // A bare time: on the start day if it is later on the clock than the start, else on the
+        // day after. Built on that day, so a time daylight saving skips is an error there too.
+        let clock = calendar.dateComponents([.hour, .minute, .second], from: start)
+        var dayStart = calendar.startOfDay(for: start)
+        if (time.hour, time.minute, time.second) <= (clock.hour!, clock.minute!, clock.second!) {
+            dayStart = DateParsing.startOfDay(1, after: dayStart, calendar: calendar)
+        }
+        let day = calendar.dateComponents([.year, .month, .day], from: dayStart)
+        return try DateParsing.makeDate(year: day.year!, month: day.month!, day: day.day!,
+                                        time: time, timeZone: calendar.timeZone)
     }
 
     static func parseAlarm(_ raw: String, start: Date, timeZone: TimeZone) throws -> Alarm {

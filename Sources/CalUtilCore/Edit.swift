@@ -365,8 +365,15 @@ public enum Editor {
         // The same alarms for the same start go off at the same moments, even if a new zone
         // shows those moments differently.
         if old.alarms == new.alarms && old.start == new.start { skip.formUnion(["Alarm", "Alarms"]) }
-        let before = Summary.fields(old, localTimeZone: localTimeZone, listMatches: false).filter { !skip.contains($0.label) }
-        let after = Summary.fields(new, localTimeZone: localTimeZone, listMatches: listMatches).filter { !skip.contains($0.label) }
+        // The summary says "Alarm" for one alarm and "Date" for one day; compare them as the
+        // same field as "Alarms" and "Dates", or going from none to one would show two rows.
+        func fields(_ event: EventSpec, listMatches: Bool) -> [(label: String, value: String)] {
+            Summary.fields(event, localTimeZone: localTimeZone, listMatches: listMatches)
+                .filter { !skip.contains($0.label) }
+                .map { (label: ["Alarm": "Alarms", "Date": "Dates"][$0.label] ?? $0.label, value: $0.value) }
+        }
+        let before = fields(old, listMatches: false)
+        let after = fields(new, listMatches: listMatches)
         func value(_ label: String, in fields: [(label: String, value: String)]) -> String? {
             fields.first { $0.label == label }?.value
         }

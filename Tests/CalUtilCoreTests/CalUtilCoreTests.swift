@@ -1371,3 +1371,32 @@ let concert = Template(name: "concert", notes: "Bring tickets", calendar: "Perso
         #expect(allDay?.note != nil)
     }
 }
+
+@Suite struct DifferenceLabelTests {
+    let sydney = TimeZone(identifier: "Australia/Sydney")!
+
+    @Test func oneAlarmIsTheSameFieldAsSeveral() throws {
+        let event = EventSpec(title: "Tour", timeZone: sydney, isAllDay: false,
+                              start: utc("2026-11-15T00:00:00Z"), end: utc("2026-11-15T03:30:00Z"))
+        var options = AddOptions()
+        options.addAlarms = ["1d"]
+        let changed = try Editor.apply(options, to: event, now: now, localTimeZone: sydney)
+        #expect(Editor.differences(from: event, to: changed, localTimeZone: sydney) == """
+            Alarms  - none
+                    + 1 day before  Sat 14 Nov 2026 11:00
+            """)
+    }
+
+    @Test func oneDayIsTheSameFieldAsSeveral() throws {
+        let day = try DateParsing.startOfDay(year: 2026, month: 12, day: 24, timeZone: sydney)
+        let event = EventSpec(title: "Christmas", timeZone: sydney, isAllDay: true, start: day,
+                              end: DateParsing.startOfDay(1, after: day, calendar: DateParsing.gregorian(sydney)))
+        var options = AddOptions()
+        options.duration = "3d"
+        let changed = try Editor.apply(options, to: event, now: now, localTimeZone: sydney)
+        #expect(Editor.differences(from: event, to: changed, localTimeZone: sydney) == """
+            Dates  - Thu 24 Dec 2026 (all day)
+                   + Thu 24 Dec 2026 – Sat 26 Dec 2026 (all day, 3 days)
+            """)
+    }
+}

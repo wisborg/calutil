@@ -68,7 +68,7 @@ func openInCalendar(_ spec: EventSpec) throws -> URL {
 /// permission is calutil's rather than the terminal's (see Responsibility.swift).
 func needsCalendarAccess(_ invocation: Invocation) -> Bool {
     switch invocation {
-    case .calendars, .list, .search: true
+    case .calendars, .list, .search, .edit, .delete: true
     case .add(let options): options.action == .save
     case .templates, .help, .version: false
     }
@@ -94,6 +94,10 @@ func run() -> Int32 {
             print(try EventKitBackend.listEvents(options))
         case .search(let options):
             print(try EventKitBackend.searchEvents(options))
+        case .edit(let options):
+            try EventKitBackend.edit(options)
+        case .delete(let options):
+            try EventKitBackend.delete(options)
         case .add(let options):
             try add(options)
         }

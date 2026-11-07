@@ -49,6 +49,27 @@ public struct EventSpec: Equatable, Sendable {
     public var place: Place?
     /// All of the search's matches, `place` among them, for the dry run to list.
     public var matches: [Place] = []
+
+    public init(title: String, location: String? = nil, notes: String? = nil, url: URL? = nil,
+                calendarName: String? = nil, timeZone: TimeZone, isAllDay: Bool, start: Date, end: Date,
+                alarms: [Alarm] = [], templateName: String? = nil, warnings: [String] = [],
+                map: MapRequest = .none, place: Place? = nil, matches: [Place] = []) {
+        self.title = title
+        self.location = location
+        self.notes = notes
+        self.url = url
+        self.calendarName = calendarName
+        self.timeZone = timeZone
+        self.isAllDay = isAllDay
+        self.start = start
+        self.end = end
+        self.alarms = alarms
+        self.templateName = templateName
+        self.warnings = warnings
+        self.map = map
+        self.place = place
+        self.matches = matches
+    }
 }
 
 public enum Resolver {
@@ -111,17 +132,8 @@ public enum Resolver {
                 throw CalUtilError("--start needs a time, e.g. \(example) (or add --all-day)")
             }
             start = try DateParsing.makeDate(startInput, time: time, defaultTimeZone: timeZone)
-            // An offset typed in --start decides the zone a bare --end time and HH:MM alarms are
-            // read in, unless --timezone names one. Z means UTC. A number that is this Mac's own
-            // offset at that moment (+11:00 in Sydney) keeps the Mac's named zone, so the event
-            // follows its daylight-saving rules; any other gets that fixed offset.
-            if zone.value == nil, let offset = startInput.utcOffset {
-                if startText.trimmingCharacters(in: .whitespaces).uppercased().hasSuffix("Z") {
-                    timeZone = TimeZone(secondsFromGMT: 0)!
-                } else if localTimeZone.secondsFromGMT(for: start) != offset,
-                          let fixed = TimeZone(secondsFromGMT: offset) {
-                    timeZone = fixed
-                }
+            if zone.value == nil, let typed = typedZone(startText, startInput, start: start, localTimeZone: localTimeZone) {
+                timeZone = typed
             }
         }
         let calendar = DateParsing.gregorian(timeZone)
@@ -257,6 +269,19 @@ public enum Resolver {
             templateName: t?.name,
             warnings: warnings,
             map: map)
+    }
+
+    /// The zone an offset typed in --start gives the event, which also decides the zone a bare
+    /// --end time and HH:MM alarms are read in (unless --timezone names one). Z means UTC. A
+    /// number that is this Mac's own offset at that moment (+11:00 in Sydney) keeps the Mac's
+    /// named zone (nil), so the event follows its daylight-saving rules; any other gets that
+    /// fixed offset.
+    static func typedZone(_ text: String, _ input: DateTimeInput, start: Date, localTimeZone: TimeZone) -> TimeZone? {
+        guard let offset = input.utcOffset else { return nil }
+        if text.trimmingCharacters(in: .whitespaces).uppercased().hasSuffix("Z") {
+            return TimeZone(secondsFromGMT: 0)!
+        }
+        return localTimeZone.secondsFromGMT(for: start) != offset ? TimeZone(secondsFromGMT: offset) : nil
     }
 
     static func resolveEnd(_ text: String, start: Date, isAllDay: Bool, calendar: Calendar, now: Date) throws -> Date {

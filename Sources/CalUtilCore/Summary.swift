@@ -5,6 +5,21 @@ public enum Summary {
     /// `listMatches` lists every match of the map search, so another can be picked (dry run).
     public static func render(_ event: EventSpec, localTimeZone: TimeZone = .current,
                               listMatches: Bool = false) -> String {
+        table(fields(event, localTimeZone: localTimeZone, listMatches: listMatches))
+    }
+
+    /// Labelled rows, values that span lines kept indented under their label.
+    static func table(_ rows: [(label: String, value: String)]) -> String {
+        let width = rows.map(\.label.count).max() ?? 0
+        return rows.flatMap { row in
+            row.value.lines.enumerated().map { index, line in
+                (index == 0 ? row.label : "").padded(to: width) + "  " + line
+            }
+        }.joined(separator: "\n")
+    }
+
+    /// The summary's fields in order, one per label (a value may span lines).
+    static func fields(_ event: EventSpec, localTimeZone: TimeZone, listMatches: Bool) -> [(label: String, value: String)] {
         var rows: [(label: String, value: String)] = []
         let zone = event.timeZone
         let calendar = DateParsing.gregorian(zone)
@@ -69,13 +84,16 @@ public enum Summary {
         if let notes = event.notes { rows.append(("Notes", notes)) }
         if let template = event.templateName { rows.append(("Template", template)) }
 
-        // Values can span lines (a location with its address, notes); keep them indented.
-        let width = rows.map(\.label.count).max() ?? 0
-        return rows.flatMap { row in
-            row.value.lines.enumerated().map { index, line in
-                (index == 0 ? row.label : "").padded(to: width) + "  " + line
+        // Rows with an empty label continue the one before.
+        var fields: [(label: String, value: String)] = []
+        for row in rows {
+            if row.label.isEmpty, !fields.isEmpty {
+                fields[fields.count - 1].value += "\n" + row.value
+            } else {
+                fields.append(row)
             }
-        }.joined(separator: "\n")
+        }
+        return fields
     }
 
     /// "Fri 6 Nov 2026 18:00", or without the time.

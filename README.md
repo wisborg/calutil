@@ -1,7 +1,7 @@
 # calutil
 
 Work with Apple Calendar from the command line: add events (using templates for the ones you
-add often), see what's on, find events, and look at your calendars.
+add often), see what's on, find, change and delete events, and look at your calendars.
 
 ```
 calutil add --template concert --title "Beethoven's 9th" --location "Sydney Opera House" \
@@ -16,6 +16,8 @@ calutil calendars --verbose
 | `add`       | Add an event (a dry run unless you pass `--save` or `--open`)   |
 | `list`      | Show the events on a day, or over several days                  |
 | `search`    | Find events by title, location or notes                         |
+| `edit`      | Change an event (a dry run unless you pass `--save`)            |
+| `delete`    | Delete an event (a dry run unless you pass `--yes`)             |
 | `calendars` | List your calendars; `--verbose` adds ids, colours and contents |
 | `templates` | List the templates for `add`                                    |
 | `help`      | `calutil help <command>` shows every option of a command        |
@@ -45,7 +47,7 @@ make install-templates    # copies templates.example.json to ~/.config/calutil/t
 
 ## Calendar access
 
-The first `calutil add --save`, `calutil list`, `calutil search` or `calutil calendars` asks macOS for access to your calendars. Choose
+The first `calutil add --save`, `list`, `search`, `edit`, `delete` or `calendars` asks macOS for access to your calendars. Choose
 **Allow Full Access**: calutil needs to read your calendar list so it can find calendars by
 name.
 
@@ -132,6 +134,29 @@ Case, accents and curly quotes don't matter, so `dvorak's` finds "Dvořák’s".
 today to a year ahead unless you give `--from` and `--to` (both take the same days as `list`).
 Matches are shown as `list` shows them, followed by how many there were; a repeating event
 shows each time it occurs.
+
+## Changing and deleting events
+
+```
+calutil edit --match prokofiev --title "Prokofiev's Second Piano Concerto"
+calutil edit --match "lena berg" --on 2027-07-05 --start 2027-07-05T19:30 --save
+calutil edit --id 1A2B3C4D-…:5E6F7A8B-… --map "Sydney Opera House" --save
+calutil delete --match dentist --on 2026-12-01 --yes
+```
+
+Pick the event with `--id` (which `search --verbose` shows) or with `--match`, which searches
+as `calutil search` does (`--match-title`, `--match-location`, `--match-notes`,
+`--match-calendar`, and `--on DAY` or `--from`/`--to` for the days). A search must find exactly
+one event; otherwise the matches are listed and nothing happens.
+
+`edit` takes the same options as `add`, and only what you give changes: `--start` moves the
+event and keeps its length (a day alone keeps the time too), `--timezone` keeps the clock time,
+`--calendar` moves it to another calendar, a new `--location` gets a new map point, and `--map`
+on its own adds one. It shows what would change, as `-` old and `+` new lines, and changes
+nothing without `--save`. `delete` shows the event and deletes nothing without `--yes`.
+
+A repeating event has one id for all its occurrences: with `--id`, say which with `--on DAY`.
+Only that occurrence changes, unless you add `--future` for it and the later ones too.
 
 ## Templates
 

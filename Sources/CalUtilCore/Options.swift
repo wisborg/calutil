@@ -5,13 +5,15 @@ public enum Invocation: Equatable, Sendable {
     case add(AddOptions)
     case list(ListOptions)
     case search(SearchOptions)
+    case edit(EditOptions)
+    case delete(DeleteOptions)
     case calendars(verbose: Bool)
     case templates(path: String?, json: Bool)
     /// Help, for one command when given.
     case help(String?)
     case version
 
-    public static let commands = ["add", "list", "search", "calendars", "templates", "help", "version"]
+    public static let commands = ["add", "list", "search", "edit", "delete", "calendars", "templates", "help", "version"]
 
     public static func parse(_ arguments: [String]) throws -> Invocation {
         guard let command = arguments.first else { return .help(nil) }
@@ -34,6 +36,10 @@ public enum Invocation: Equatable, Sendable {
             return try helpOr("list") { .list(try ListOptions.parse(rest)) }
         case "search":
             return try helpOr("search") { .search(try SearchOptions.parse(rest)) }
+        case "edit":
+            return try helpOr("edit") { .edit(try EditOptions.parse(rest)) }
+        case "delete":
+            return try helpOr("delete") { .delete(try DeleteOptions.parse(rest)) }
         case "calendars":
             return try helpOr("calendars") {
                 var scanner = ArgumentScanner(rest, command: command)
@@ -178,47 +184,62 @@ public struct AddOptions: Equatable, Sendable {
 
             case "--template": options.template = trimmedNonEmpty(try scanner.single())  // "" = none
             case "--templates": options.templatesPath = (try scanner.single() as NSString).expandingTildeInPath
-            case "--title": options.title = try scanner.single()
-            case "--location": options.location = try scanner.single()
-            case "--notes": options.notes = try scanner.single()
-            case "--url": options.url = try scanner.single()
-            case "--calendar": options.calendar = try scanner.single()
-            case "--timezone": options.timezone = try scanner.single()
-            case "--start": options.start = try scanner.single()
-            case "--end": options.end = try scanner.single()
-            case "--duration": options.duration = try scanner.single()
-
-            case "--all-day": try scanner.flag(); options.allDay = true
-            case "--no-all-day": try scanner.flag(); options.allDay = false
-
-            case "--alarm": options.alarms = (options.alarms ?? []) + [try scanner.value()]
-            case "--add-alarm": options.addAlarms.append(try scanner.value())
-            case "--no-alarms": try scanner.flag(); options.noAlarms = true
-
-            case "--map": options.map = try scanner.single()
-            case "--map-match":
-                let text = try scanner.single()
-                guard let n = Int(text), (1...Places.maxMatches).contains(n) else {
-                    throw CalUtilError("--map-match takes a number from 1 to \(Places.maxMatches), not '\(text)'", usage: true)
-                }
-                options.mapMatch = n
-            case "--no-map": try scanner.flag(); options.noMap = true
 
             default:
+                if try options.takeField(&scanner) { continue }
                 if scanner.isOption { throw scanner.unexpected() }
                 throw CalUtilError(
                     "unexpected argument '\(scanner.argument)': values are given with named options, e.g. --title \"\(scanner.argument)\"",
                     usage: true)
             }
         }
+        try options.checkFields()
+        return options
+    }
 
-        if options.noAlarms && options.alarms != nil {
+    /// The event's settings, shared with `edit`: true when the scanner's option was one.
+    mutating func takeField(_ scanner: inout ArgumentScanner) throws -> Bool {
+        switch scanner.name {
+        case "--title": title = try scanner.single()
+        case "--location": location = try scanner.single()
+        case "--notes": notes = try scanner.single()
+        case "--url": url = try scanner.single()
+        case "--calendar": calendar = try scanner.single()
+        case "--timezone": timezone = try scanner.single()
+        case "--start": start = try scanner.single()
+        case "--end": end = try scanner.single()
+        case "--duration": duration = try scanner.single()
+
+        case "--all-day": try scanner.flag(); allDay = true
+        case "--no-all-day": try scanner.flag(); allDay = false
+
+        case "--alarm": alarms = (alarms ?? []) + [try scanner.value()]
+        case "--add-alarm": addAlarms.append(try scanner.value())
+        case "--no-alarms": try scanner.flag(); noAlarms = true
+
+        case "--map": map = try scanner.single()
+        case "--map-match":
+            let text = try scanner.single()
+            guard let n = Int(text), (1...Places.maxMatches).contains(n) else {
+                throw CalUtilError("--map-match takes a number from 1 to \(Places.maxMatches), not '\(text)'", usage: true)
+            }
+            mapMatch = n
+        case "--no-map": try scanner.flag(); noMap = true
+        default: return false
+        }
+        return true
+    }
+
+    func checkFields() throws {
+        if noAlarms && alarms != nil {
             throw CalUtilError("--no-alarms and --alarm can't be combined (--alarm already replaces the template's alarms)", usage: true)
         }
-        if options.noMap && (options.map != nil || options.mapMatch != nil) {
+        if noMap && (map != nil || mapMatch != nil) {
             throw CalUtilError("--no-map can't be combined with --map or --map-match", usage: true)
         }
-        return options
+        if end != nil && duration != nil {
+            throw CalUtilError("use either --end or --duration, not both", usage: true)
+        }
     }
 }
 

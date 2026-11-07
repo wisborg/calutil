@@ -7,6 +7,8 @@ public enum Help {
         case "add": add
         case "list": list
         case "search": search
+        case "edit": edit
+        case "delete": delete
         case "calendars": calendars
         case "templates": templates
         case "help": general
@@ -25,6 +27,8 @@ public enum Help {
       add          Add an event (a dry run unless you pass --save or --open)
       list         Show the events on a day, or over several days
       search       Find events by title, location or notes
+      edit         Change an event (a dry run unless you pass --save)
+      delete       Delete an event (a dry run unless you pass --yes)
       calendars    List your calendars
       templates    List the event templates for 'add'
       help [CMD]   Show help, for one command if given
@@ -159,6 +163,83 @@ public enum Help {
       calutil search dvorak
       calutil search --location "opera house" --from 2026-01-01 --to 2027-12-31
       calutil search concert --calendar Home --verbose
+    """
+
+    static let edit = """
+    calutil edit: change an event
+
+    USAGE
+      calutil edit --id ID [--on DAY] [changes] [--future] [--save]
+      calutil edit --match TEXT [--match-title T] [--match-location L] [--match-notes N]
+                   [--match-calendar NAME]... [--on DAY | --from DAY --to DAY]
+                   [changes] [--future] [--save]
+
+      Without --save this is a dry run: it shows what would change and changes nothing.
+
+    WHICH EVENT
+    \(selection)
+
+    CHANGES
+      The same options as 'calutil add'; only what you give changes.
+
+      --title TEXT, --location TEXT, --notes TEXT, --url URL
+                           New values; "" clears the location, notes or URL
+      --calendar NAME      Move it to this calendar
+      --start DATETIME     Move it, keeping its length. A day alone (2027-09-12) keeps the time.
+      --end DATETIME|TIME, --duration DUR
+                           Change when it ends
+      --all-day, --no-all-day
+                           Make it all-day, or timed (which needs a --start with a time)
+      --timezone ZONE      Put it in another zone, keeping its clock time (19:00 stays 19:00)
+      --alarm WHEN         Replace the alarms (repeatable); --add-alarm WHEN adds one;
+                           --no-alarms removes them all
+      --map TEXT|LAT,LON, --map-match N, --no-map
+                           As for add. A new --location is looked up on the map too; --map on
+                           its own adds a map to an event that has none.
+
+    REPEATING EVENTS
+      --future             Change this and the later occurrences (default: only this one)
+
+    EXAMPLES
+      calutil edit --match prokofiev --title "Prokofiev's Second Piano Concerto"
+      calutil edit --match "lena berg" --on 2027-07-05 --start 2027-07-05T19:30 --save
+      calutil edit --id 1A2B3C4D-…:5E6F7A8B-… --map "Sydney Opera House" --save
+    """
+
+    static let delete = """
+    calutil delete: delete an event
+
+    USAGE
+      calutil delete --id ID [--on DAY] [--future] [--yes]
+      calutil delete --match TEXT [--match-title T] [--match-location L] [--match-notes N]
+                     [--match-calendar NAME]... [--on DAY | --from DAY --to DAY]
+                     [--future] [--yes]
+
+      Without --yes this is a dry run: it shows the event and deletes nothing.
+
+    WHICH EVENT
+    \(selection)
+
+    REPEATING EVENTS
+      --future             Delete this and the later occurrences (default: only this one)
+
+    EXAMPLES
+      calutil delete --match dentist --on 2026-12-01
+      calutil delete --match dentist --on 2026-12-01 --yes
+    """
+
+    /// How edit and delete pick their event.
+    private static let selection = """
+      --id ID              The event's id, as 'calutil search --verbose' shows it. For a
+                           repeating event, add --on DAY to say which occurrence.
+      --match TEXT         Find it as 'calutil search TEXT' would (title, location or notes);
+                           it must find exactly one event, or the matches are listed
+      --match-title T, --match-location L, --match-notes N
+                           Look in that field only
+      --match-calendar NAME
+                           Only in this calendar (repeatable)
+      --on DAY             The day the event (or occurrence) is on
+      --from DAY, --to DAY Search these days instead (default: today to a year ahead)
     """
 
     static let list = """

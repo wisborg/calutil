@@ -1007,3 +1007,147 @@ let concert = Template(name: "concert", notes: "Bring tickets", calendar: "Perso
         #expect(none == "No events matching 'mahler', location 'town hall' from Sat 7 Nov 2026 to Sat 6 Nov 2027.")
     }
 }
+
+@Suite struct EditTests {
+    let sydney = TimeZone(identifier: "Australia/Sydney")!
+    let now = utc("2026-11-07T01:00:00Z")  // Sat 7 Nov 2026 12:00 in Sydney
+    let operaHouse = Place(name: "Sydney Opera House", address: "Bennelong Point, Sydney NSW 2000, Australia",
+                           latitude: -33.8568674, longitude: 151.2152855)
+    /// Sat 11 Sep 2027 20:00–22:00 in Sydney (UTC+10).
+    var concert: EventSpec {
+        EventSpec(title: "Prokofiev's Seconds Piano Concerto", location: "Sydney Opera House", url: nil,
+                  calendarName: "iCloud/Home", timeZone: sydney, isAllDay: false,
+                  start: utc("2027-09-11T10:00:00Z"), end: utc("2027-09-11T12:00:00Z"),
+                  alarms: [.beforeStart(seconds: 7 * 86_400), .beforeStart(seconds: 2 * 86_400)], place: operaHouse)
+    }
+
+    func edit(_ args: [String], _ event: EventSpec? = nil) throws -> EventSpec {
+        let options = try EditOptions.parse(["--id", "x"] + args)
+        return try Editor.apply(options.changes, to: event ?? concert, now: now, localTimeZone: sydney)
+    }
+
+    @Test func parsing() throws {
+        let o = try EditOptions.parse(["--match", "lena berg", "--match-calendar", "Home", "--on", "2027-07-05",
+                                       "--title", "New", "--calendar", "Family", "--future", "--save"])
+        #expect(o.selection.search.text == "lena berg")
+        #expect(o.selection.search.calendars == ["Home"])
+        #expect(o.selection.searchOptions.from == "2027-07-05" && o.selection.searchOptions.to == "2027-07-05")
+        #expect(o.changes.title == "New" && o.changes.calendar == "Family")
+        #expect(o.future && o.save)
+        #expect(try Invocation.parse(["edit", "--help"]) == .help("edit"))
+        #expect(try Invocation.parse(["delete", "--id", "x", "--yes"]) == .delete({
+            var d = DeleteOptions(); d.selection.id = "x"; d.confirmed = true; return d }()))
+
+        #expect(throws: CalUtilError.self) { try EditOptions.parse(["--title", "x"]) }               // which event?
+        #expect(throws: CalUtilError.self) { try EditOptions.parse(["--id", "x"]) }                  // nothing to change
+        #expect(throws: CalUtilError.self) { try EditOptions.parse(["--id", "x", "--match", "y", "--title", "z"]) }
+        #expect(throws: CalUtilError.self) { try EditOptions.parse(["--id", "x", "--from", "today", "--title", "z"]) }
+        #expect(throws: CalUtilError.self) { try EditOptions.parse(["--match", "x", "--on", "today", "--to", "friday", "--title", "z"]) }
+        #expect(throws: CalUtilError.self) { try EditOptions.parse(["--id", "x", "--template", "concert"]) }
+        #expect(throws: CalUtilError.self) { try EditOptions.parse(["--id", "x", "--end", "21:00", "--duration", "1h"]) }
+        #expect(throws: CalUtilError.self) { try DeleteOptions.parse(["--id", "x", "--title", "y"]) }
+        #expect(throws: CalUtilError.self) { try DeleteOptions.parse(["--yes"]) }
+    }
+
+    @Test func onlyWhatIsGivenChanges() throws {
+        let e = try edit(["--title", "Prokofiev's Second Piano Concerto"])
+        var expected = concert
+        expected.title = "Prokofiev's Second Piano Concerto"
+        #expect(e == expected)
+        #expect(Editor.differences(from: concert, to: e, localTimeZone: sydney) == """
+            Title  - Prokofiev's Seconds Piano Concerto
+                   + Prokofiev's Second Piano Concerto
+            """)
+        #expect(throws: CalUtilError.self) { try edit(["--title", " "]) }
+        #expect(Editor.differences(from: concert, to: try edit(["--calendar", "iCloud/Home"]), localTimeZone: sydney) == nil)
+    }
+
+    @Test func clearingAndSettingFields() throws {
+        let e = try edit(["--notes", "Row K", "--url", "https://example.com", "--location", ""])
+        #expect(e.notes == "Row K")
+        #expect(e.url?.absoluteString == "https://example.com")
+        #expect(e.location == nil && e.place == nil && e.map == .none)  // no location, no map
+        #expect(throws: CalUtilError.self) { try edit(["--url", "example.com"]) }
+    }
+
+    @Test func movingKeepsTheLength() throws {
+        let later = try edit(["--start", "2027-09-11T19:30"])
+        #expect(later.start == utc("2027-09-11T09:30:00Z"))
+        #expect(later.end == utc("2027-09-11T11:30:00Z"))
+        // A day alone keeps the clock time.
+        let nextDay = try edit(["--start", "2027-09-12"])
+        #expect(nextDay.start == utc("2027-09-12T10:00:00Z"))
+        // Changing only the end.
+        #expect(try edit(["--end", "23:00"]).end == utc("2027-09-11T13:00:00Z"))
+        #expect(try edit(["--duration", "90m"]).end == utc("2027-09-11T11:30:00Z"))
+        // Relative alarms follow the start; that is not a change to the alarms.
+        #expect(later.alarms == concert.alarms)
+    }
+
+    @Test func aNewZoneKeepsTheClockTime() throws {
+        let e = try edit(["--timezone", "Europe/Copenhagen"])
+        #expect(e.timeZone.identifier == "Europe/Copenhagen")
+        #expect(e.start == utc("2027-09-11T18:00:00Z"))  // 20:00 in Copenhagen (UTC+2)
+        #expect(e.end.timeIntervalSince(e.start) == 7_200)
+    }
+
+    @Test func allDayAndBack() throws {
+        let allDay = try edit(["--all-day"])
+        #expect(allDay.isAllDay)
+        #expect(allDay.start == utc("2027-09-10T14:00:00Z"))  // midnight in Sydney
+        #expect(allDay.end == utc("2027-09-11T14:00:00Z"))
+        #expect(throws: CalUtilError.self) { try edit(["--no-all-day"], allDay) }
+        #expect(throws: CalUtilError.self) { try edit(["--no-all-day", "--start", "2027-09-11"], allDay) }
+        let timed = try edit(["--no-all-day", "--start", "2027-09-11T20:00"], allDay)
+        #expect(!timed.isAllDay && timed.end.timeIntervalSince(timed.start) == 3_600)
+        // A two-day all-day event keeps its days when moved.
+        let twoDays = try edit(["--duration", "2d"], allDay)
+        let moved = try edit(["--start", "2027-10-01"], twoDays)
+        #expect(moved.end == utc("2027-10-02T14:00:00Z"))
+    }
+
+    @Test func alarms() throws {
+        #expect(try edit(["--no-alarms"]).alarms.isEmpty)
+        #expect(try edit(["--alarm", "1d"]).alarms == [.beforeStart(seconds: 86_400)])
+        #expect(try edit(["--add-alarm", "1h", "--add-alarm", "2d"]).alarms
+                == [.beforeStart(seconds: 7 * 86_400), .beforeStart(seconds: 2 * 86_400), .beforeStart(seconds: 3_600)])
+        // A new alarm already in the past is left out with a warning; existing ones stay.
+        let soon = EventSpec(title: "Soon", timeZone: sydney, isAllDay: false, start: utc("2026-11-08T01:00:00Z"),
+                             end: utc("2026-11-08T02:00:00Z"), alarms: [.beforeStart(seconds: 7 * 86_400)])
+        let e = try edit(["--add-alarm", "2d", "--add-alarm", "1h"], soon)
+        #expect(e.alarms == [.beforeStart(seconds: 7 * 86_400), .beforeStart(seconds: 3_600)])
+        #expect(e.warnings.contains { $0.contains("2 days before") })
+    }
+
+    @Test func map() throws {
+        #expect(try edit(["--no-map"]).place == nil)
+        #expect(try edit(["--location", "City Recital Hall"]).map == .search("City Recital Hall", pick: nil))
+        #expect(try edit(["--location", "City Recital Hall"]).place == nil)
+        var plain = concert
+        plain.place = nil
+        #expect(try edit(["--map", "-33.8569,151.2153"], plain).map == .place(Place(latitude: -33.8569, longitude: 151.2153)))
+        #expect(try edit(["--map", "Sydney Opera House", "--map-match", "2"], plain).map == .search("Sydney Opera House", pick: 2))
+        #expect(throws: CalUtilError.self) { try edit(["--map-match", "2"]) }
+        // An unchanged location keeps its map point.
+        #expect(try edit(["--title", "x"]).place == operaHouse)
+    }
+
+    @Test func differencesShowOldAndNew() throws {
+        let e = try edit(["--start", "2027-09-11T19:30", "--location", "City Recital Hall", "--no-alarms"])
+        let text = Editor.differences(from: concert, to: e, localTimeZone: sydney)
+        #expect(text == """
+            Location  - Sydney Opera House
+                      + City Recital Hall
+            Map       - Sydney Opera House, Bennelong Point, Sydney NSW 2000, Australia  (-33.8569, 151.2153)
+                      + (none)
+            Starts    - Sat 11 Sep 2027 20:00
+                      + Sat 11 Sep 2027 19:30
+            Ends      - Sat 11 Sep 2027 22:00  (2 hours)
+                      + Sat 11 Sep 2027 21:30  (2 hours)
+            Alarms    - 1 week before  Sat 4 Sep 2027 20:00
+                      - 2 days before  Thu 9 Sep 2027 20:00
+                      + none
+            """)
+        #expect(Editor.describe(concert) == "“Prokofiev's Seconds Piano Concerto” on Sat 11 Sep 2027 20:00 in iCloud/Home")
+    }
+}

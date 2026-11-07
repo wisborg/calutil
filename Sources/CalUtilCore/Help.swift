@@ -95,6 +95,9 @@ public enum Help {
       --map-match N        Use the Nth match the dry run lists
       --no-map             Keep the location as text only
 
+      A template can set "map" too (coordinates or search text). It belongs to the template's
+      location, so it is used only when --location is left out or is the same text.
+
     OTHER
       --templates PATH     Template file (default: $CALUTIL_TEMPLATES, else
                            $XDG_CONFIG_HOME/calutil/templates.json, else
@@ -116,7 +119,8 @@ public enum Help {
           },
         }
 
-      Settings: title, location, notes, url, calendar, timezone, time, duration, allDay, alarms.
+      Settings: title, location, map, notes, url, calendar, timezone, time, duration, allDay,
+      alarms.
       Whatever is given on the command line wins over the template.
 
     EXAMPLE

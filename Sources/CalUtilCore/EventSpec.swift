@@ -222,16 +222,21 @@ public enum Resolver {
             warnings.append("the event starts in the past")
         }
 
-        // Map: --map's coordinates or search text, else the location text.
+        // Map: --map's coordinates or search text, else the template's (which belongs to the
+        // template's own location, so only when no other location is given), else the location.
         let location = pick(o.location, t?.location).value
+        let ownLocation = o.location == nil || trimmedNonEmpty(o.location) == trimmedNonEmpty(t?.location)
+        let mapSetting = o.map != nil ? (text: nonEmpty(o.map), fromTemplate: false)
+            : (text: ownLocation ? nonEmpty(t?.map) : nil, fromTemplate: true)
         var map = MapRequest.none
         if !o.noMap {
-            if let text = nonEmpty(o.map), let place = Places.parseCoordinates(text) {
+            if let text = mapSetting.text, let place = Places.parseCoordinates(text) {
                 if o.mapMatch != nil {
-                    throw CalUtilError("--map-match picks a search match; --map \(text) is coordinates", usage: true)
+                    let source = mapSetting.fromTemplate ? "the template's map" : "--map \(text)"
+                    throw CalUtilError("--map-match picks a search match, but \(source) is coordinates", usage: true)
                 }
                 map = .place(place)
-            } else if let text = nonEmpty(o.map) ?? location {
+            } else if let text = mapSetting.text ?? location {
                 map = .search(Places.query(for: text), pick: o.mapMatch)
             } else if o.mapMatch != nil {
                 throw CalUtilError("--map-match needs a --location or --map to search for", usage: true)

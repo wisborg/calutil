@@ -87,7 +87,9 @@ program and ask again.
   `--map-match 2`, search for other words with `--map "City Recital Hall"`, give coordinates
   with `--map -33.8569,151.2153`, or skip it with `--no-map`. A location with its address
   (`$'Sydney Opera House\nBennelong Point, Sydney NSW 2000, Australia'`) finds the right
-  place most reliably. `calutil list --verbose` shows an event's map point.
+  place most reliably. `calutil list --verbose` shows an event's map point. A template for a
+  venue can set `"map": "-33.8569,151.2153"`; it is used only with the template's own
+  location (when `--location` is left out or is the same text).
 * **Calendars:** `--calendar Personal`; if two accounts both have one with that name, use
   `--calendar "iCloud/Personal"`; if even that is ambiguous (e.g. several shared calendars
   called "Family"), use the id that `calutil calendars` shows next to each of them.
@@ -132,7 +134,7 @@ if you set that), or wherever `$CALUTIL_TEMPLATES` or `--templates` points. Comm
 }
 ```
 
-Settings: `title`, `location`, `notes`, `url`, `calendar`, `timezone`, `time`, `duration`,
+Settings: `title`, `location`, `map`, `notes`, `url`, `calendar`, `timezone`, `time`, `duration`,
 `allDay`, `alarms`. A misspelt setting is an error rather than being silently ignored.
 
 Because of the comments, tools such as `jq` can't read the file directly. `calutil templates

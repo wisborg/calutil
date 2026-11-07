@@ -662,10 +662,10 @@ let concert = Template(name: "concert", notes: "Bring tickets", calendar: "Perso
     }
 
     @Test func everyTemplateSettingRoundTrips() throws {
-        let all = Template(name: "all", title: "T", location: "L", notes: "N", url: "https://u.example",
+        let all = Template(name: "all", title: "T", location: "L", map: "1,2", notes: "N", url: "https://u.example",
                            calendar: "C", timezone: "UTC", time: "19:30", duration: "2h", allDay: false, alarms: ["1d"])
         #expect(try TemplateStore.parse(Data(TemplateStore.json(["all": all]).utf8), source: "test") == ["all": all])
-        #expect(Template.allKeys == ["title", "location", "notes", "url", "calendar", "timezone", "time", "duration", "allDay", "alarms"])
+        #expect(Template.allKeys == ["title", "location", "map", "notes", "url", "calendar", "timezone", "time", "duration", "allDay", "alarms"])
     }
 
     @Test func zeroLengthAndLongEventsInTheSinglePass() {
@@ -865,5 +865,40 @@ let concert = Template(name: "concert", notes: "Bring tickets", calendar: "Perso
         let text = EventList.render([event], from: utc("2026-11-19T13:00:00Z"), days: 1,
                                     timeZone: TimeZone(identifier: "Australia/Sydney")!, now: now, verbose: true)
         #expect(text.contains("map       -33.8569, 151.2153"))
+    }
+}
+
+@Suite struct TemplateMapTests {
+    let venue = Template(name: "opera_house", location: "Sydney Opera House\nBennelong Point, Sydney NSW 2000, Australia",
+                         map: "-33.8569,151.2153", duration: "2h")
+    let base = ["--title", "x", "--start", "2026-11-20T19:00"]
+    let point = MapRequest.place(Place(latitude: -33.8569, longitude: 151.2153))
+
+    @Test func templateMapWithItsOwnLocation() throws {
+        #expect(try resolve(base, template: venue).map == point)
+        // The same location given on the command line too.
+        #expect(try resolve(base + ["--location", "Sydney Opera House\nBennelong Point, Sydney NSW 2000, Australia"],
+                            template: venue).map == point)
+    }
+
+    @Test func anotherLocationIsSearchedInstead() throws {
+        #expect(try resolve(base + ["--location", "City Recital Hall"], template: venue).map
+                == .search("City Recital Hall", pick: nil))
+    }
+
+    @Test func commandLineWins() throws {
+        #expect(try resolve(base + ["--map", "Sydney Opera House"], template: venue).map
+                == .search("Sydney Opera House", pick: nil))
+        // --map "" drops the template's map; the location is searched.
+        #expect(try resolve(base + ["--map", ""], template: venue).map
+                == .search("Sydney Opera House, Bennelong Point, Sydney NSW 2000, Australia", pick: nil))
+        #expect(try resolve(base + ["--no-map"], template: venue).map == .none)
+        #expect(throws: CalUtilError.self) { try resolve(base + ["--map-match", "2"], template: venue) }
+    }
+
+    @Test func parsedAndListed() throws {
+        let file = try TemplateStore.parse(Data(#"{"v": {"location": "Hall", "map": "1,2"}}"#.utf8), source: "t")
+        #expect(file["v"]?.map == "1,2")
+        #expect(TemplateStore.json(file).contains(#""map" : "1,2""#))
     }
 }

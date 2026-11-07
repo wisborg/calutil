@@ -25,6 +25,7 @@ func listTemplates(_ path: String?) throws -> String {
         if let alarms = t.alarms { parts.append(alarms.isEmpty ? "no alarms" : "alarms \(alarms.joined(separator: ", "))") }
         if let calendar = t.calendar { parts.append("calendar \"\(calendar)\"") }
         if let zone = t.timezone { parts.append(zone) }
+        if let map = t.map { parts.append("map \(map)") }
         lines.append("  \(name)" + (parts.isEmpty ? "" : ": " + parts.joined(separator: ", ")))
     }
     return lines.joined(separator: "\n")

@@ -6,6 +6,9 @@ public struct Template: Equatable, Sendable {
     public var name: String
     public var title: String?
     public var location: String?
+    /// Coordinates (`-33.8569,151.2153`) or search text for the map, like `--map`. Used only
+    /// with the template's own location.
+    public var map: String?
     public var notes: String?
     public var url: String?
     public var calendar: String?
@@ -16,12 +19,13 @@ public struct Template: Equatable, Sendable {
     public var allDay: Bool?
     public var alarms: [String]?
 
-    public init(name: String, title: String? = nil, location: String? = nil, notes: String? = nil,
+    public init(name: String, title: String? = nil, location: String? = nil, map: String? = nil, notes: String? = nil,
                 url: String? = nil, calendar: String? = nil, timezone: String? = nil, time: String? = nil,
                 duration: String? = nil, allDay: Bool? = nil, alarms: [String]? = nil) {
         self.name = name
         self.title = title
         self.location = location
+        self.map = map
         self.notes = notes
         self.url = url
         self.calendar = calendar
@@ -35,7 +39,7 @@ public struct Template: Equatable, Sendable {
     /// The text settings, in the order they are documented. Parsing, the list of known
     /// settings and `--json` all come from this table.
     nonisolated(unsafe) static let stringFields: [(key: String, path: WritableKeyPath<Template, String?>)] = [
-        ("title", \.title), ("location", \.location), ("notes", \.notes), ("url", \.url),
+        ("title", \.title), ("location", \.location), ("map", \.map), ("notes", \.notes), ("url", \.url),
         ("calendar", \.calendar), ("timezone", \.timezone), ("time", \.time), ("duration", \.duration),
     ]
     static let allKeys = stringFields.map(\.key) + ["allDay", "alarms"]

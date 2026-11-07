@@ -23,7 +23,7 @@ extension EventKitBackend {
         try MapSearch.resolve(&changed)
         for warning in changed.warnings { printError("warning: \(warning)") }
 
-        print("Editing \(Editor.describe(current))\(scope(event, span))")
+        print("\(options.save ? "Changing" : "Would change") \(Editor.describe(current))\(scope(event, span))")
         guard let differences = Editor.differences(from: current, to: changed, localTimeZone: zone,
                                                    listMatches: !options.save) else {
             print("\nNothing to change: it already looks like that.")
@@ -51,7 +51,7 @@ extension EventKitBackend {
         try checkWritable(event)
 
         let current = spec(of: event)
-        print("Deleting\(scope(event, span)):\n")
+        print("\(options.confirmed ? "Deleting" : "Would delete")\(scope(event, span)):\n")
         print(Summary.render(current))
         guard options.confirmed else {
             let what = span == .futureEvents ? "this and the later occurrences" : event.hasRecurrenceRules ? "this occurrence" : "it"

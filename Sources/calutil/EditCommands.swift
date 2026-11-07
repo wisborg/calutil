@@ -13,7 +13,8 @@ extension EventKitBackend {
         try checkWritable(event)
 
         let current = spec(of: event)
-        var changed = try Editor.apply(options.changes, to: current, now: now, localTimeZone: zone)
+        var changed = try Editor.apply(options.changes, to: current, now: now, localTimeZone: zone,
+                                       keepTime: options.keepTime)
         var target: EKCalendar?
         if options.changes.calendar != nil {
             let calendar = try findCalendar(named: changed.calendarName, in: store)

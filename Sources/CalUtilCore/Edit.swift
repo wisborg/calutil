@@ -63,6 +63,8 @@ public struct EditOptions: Equatable, Sendable {
     public var changes = AddOptions()
     /// Also change the later occurrences of a repeating event.
     public var future = false
+    /// With --timezone: keep the moment the event happens, not its clock time.
+    public var keepTime = false
     public var save = false
 
     public init() {}
@@ -75,6 +77,7 @@ public struct EditOptions: Equatable, Sendable {
             case "--save": try scanner.flag(); options.save = true
             case "--dry-run": try scanner.flag(); options.save = false
             case "--future": try scanner.flag(); options.future = true
+            case "--keep-time": try scanner.flag(); options.keepTime = true
             default:
                 if try options.selection.take(&scanner) { continue }
                 if try options.changes.takeField(&scanner) { continue }
@@ -83,6 +86,14 @@ public struct EditOptions: Equatable, Sendable {
         }
         try options.selection.check("edit")
         try options.changes.checkFields()
+        if options.keepTime {
+            guard options.changes.timezone != nil else {
+                throw CalUtilError("--keep-time goes with --timezone: it keeps the moment while the zone changes", usage: true)
+            }
+            guard options.changes.start == nil else {
+                throw CalUtilError("--keep-time keeps the start, so it can't be combined with --start", usage: true)
+            }
+        }
         guard options.changes.hasFields else {
             throw CalUtilError("nothing to change: give the new values, e.g. --title, --start or --location (see calutil help edit)", usage: true)
         }
@@ -129,8 +140,9 @@ public enum Editor {
     /// The event with the changes made. Only what is given changes: moving the start keeps the
     /// length, a new location is looked up on the map (by the caller, from `map`), and the
     /// existing alarms are kept unless replaced.
+    /// `keepTime` (--keep-time): a new --timezone keeps the moment rather than the clock time.
     public static func apply(_ o: AddOptions, to current: EventSpec, now: Date = Date(),
-                             localTimeZone: TimeZone = .current) throws -> EventSpec {
+                             localTimeZone: TimeZone = .current, keepTime: Bool = false) throws -> EventSpec {
         var event = current
         event.warnings = []
         event.map = .none
@@ -157,15 +169,18 @@ public enum Editor {
             event.calendarName = calendar
         }
 
-        try applyTimes(o, current: current, to: &event, now: now, localTimeZone: localTimeZone)
+        try applyTimes(o, current: current, to: &event, now: now, localTimeZone: localTimeZone, keepTime: keepTime)
         try applyAlarms(o, to: &event, now: now)
         try applyMap(o, current: current, to: &event)
         return event
     }
 
     private static func applyTimes(_ o: AddOptions, current: EventSpec, to event: inout EventSpec,
-                                   now: Date, localTimeZone: TimeZone) throws {
+                                   now: Date, localTimeZone: TimeZone, keepTime: Bool) throws {
         let isAllDay = o.allDay ?? current.isAllDay
+        if keepTime && isAllDay {
+            throw CalUtilError("--keep-time is for timed events; an all-day event has no time to keep")
+        }
         var zone = current.isAllDay ? localTimeZone : current.timeZone
         if let name = o.timezone {
             guard let text = nonEmpty(name), let parsed = TimeZone(identifier: text) else {
@@ -226,6 +241,9 @@ public enum Editor {
                 }
             } else if current.isAllDay {
                 throw CalUtilError("give --start with a time to turn an all-day event into a timed one, e.g. --start \(isoDay(current.start, oldCalendar))T18:00")
+            } else if keepTime {
+                // The same moment, shown in the new zone: 00:00 GMT becomes 13:00 in Auckland.
+                start = current.start
             } else if zone.identifier != current.timeZone.identifier || zone.secondsFromGMT() != current.timeZone.secondsFromGMT() {
                 // A new zone keeps the clock time: 19:00 stays 19:00, now in the new zone.
                 let c = oldCalendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: current.start)
@@ -309,7 +327,10 @@ public enum Editor {
     /// The fields that differ, as `-` old and `+` new lines under each label.
     public static func differences(from old: EventSpec, to new: EventSpec, localTimeZone: TimeZone = .current,
                                    listMatches: Bool = false) -> String? {
-        let skip: Set<String> = ["Your time", "Template"]
+        var skip: Set<String> = ["Your time", "Template"]
+        // The same alarms for the same start go off at the same moments, even if a new zone
+        // shows those moments differently.
+        if old.alarms == new.alarms && old.start == new.start { skip.formUnion(["Alarm", "Alarms"]) }
         let before = Summary.fields(old, localTimeZone: localTimeZone, listMatches: false).filter { !skip.contains($0.label) }
         let after = Summary.fields(new, localTimeZone: localTimeZone, listMatches: listMatches).filter { !skip.contains($0.label) }
         func value(_ label: String, in fields: [(label: String, value: String)]) -> String? {

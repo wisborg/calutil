@@ -217,6 +217,8 @@ public enum Help {
       --all-day, --no-all-day
                            Make it all-day, or timed (which needs a --start with a time)
       --timezone ZONE      Put it in another zone, keeping its clock time (19:00 stays 19:00)
+      --keep-time          With --timezone: keep the moment instead, so the clock time
+                           changes (00:00 GMT becomes 13:00 in Pacific/Auckland)
       --alarm WHEN         Replace the alarms (repeatable); --add-alarm WHEN adds one;
                            --no-alarms removes them all
       --map TEXT|LAT,LON, --map-match N, --no-map
@@ -230,6 +232,7 @@ public enum Help {
       calutil edit --match prokofiev --title "Prokofiev's Second Piano Concerto"
       calutil edit --match "lena berg" --on 2027-07-05 --start 2027-07-05T19:30 --save
       calutil edit --id 1A2B3C4D-…:5E6F7A8B-… --map "Sydney Opera House" --save
+      calutil edit --match "harbour cruise" --timezone Pacific/Auckland --keep-time
     """
 
     static let delete = """

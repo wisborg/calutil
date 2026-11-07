@@ -1285,3 +1285,56 @@ let concert = Template(name: "concert", notes: "Bring tickets", calendar: "Perso
         }
     }
 }
+
+@Suite struct KeepTimeTests {
+    let auckland = TimeZone(identifier: "Pacific/Auckland")!
+    let sydney = TimeZone(identifier: "Australia/Sydney")!
+    /// Stored in GMT, as booking sites often do: Sun 15 Nov 2026 00:00–03:30 GMT.
+    var tour: EventSpec {
+        EventSpec(title: "Harbour Cruise", timeZone: TimeZone(secondsFromGMT: 0)!, isAllDay: false,
+                  start: utc("2026-11-15T00:00:00Z"), end: utc("2026-11-15T03:30:00Z"),
+                  alarms: [.beforeStart(seconds: 86_400)])
+    }
+
+    func edit(_ args: [String], _ event: EventSpec? = nil) throws -> EventSpec {
+        let options = try EditOptions.parse(["--id", "x"] + args)
+        return try Editor.apply(options.changes, to: event ?? tour, now: now, localTimeZone: sydney,
+                                keepTime: options.keepTime)
+    }
+
+    @Test func keepsTheMoment() throws {
+        let e = try edit(["--timezone", "Pacific/Auckland", "--keep-time"])
+        #expect(e.timeZone.identifier == "Pacific/Auckland")
+        #expect(e.start == tour.start && e.end == tour.end)
+        #expect(e.alarms == tour.alarms)
+        #expect(Editor.differences(from: tour, to: e, localTimeZone: sydney) == """
+            Starts     - Sun 15 Nov 2026 00:00
+                       + Sun 15 Nov 2026 13:00
+            Ends       - Sun 15 Nov 2026 03:30  (3 hours 30 minutes)
+                       + Sun 15 Nov 2026 16:30  (3 hours 30 minutes)
+            Time zone  - GMT (UTC)
+                       + Pacific/Auckland (UTC+13)
+            """)
+        // Without it, the clock time stays and the moment moves.
+        let clock = try edit(["--timezone", "Pacific/Auckland"])
+        #expect(clock.start == utc("2026-11-14T11:00:00Z"))  // 00:00 in Auckland
+    }
+
+    @Test func endAndDurationStillWork() throws {
+        let e = try edit(["--tz", "Pacific/Auckland", "--keep-time", "--end", "17:00"])
+        #expect(e.start == tour.start)
+        #expect(e.end == utc("2026-11-15T04:00:00Z"))  // 17:00 in Auckland
+        #expect(try edit(["--tz", "Pacific/Auckland", "--keep-time", "--duration", "4h"]).end == utc("2026-11-15T04:00:00Z"))
+    }
+
+    @Test func misuse() throws {
+        #expect(throws: CalUtilError.self) { try EditOptions.parse(["--id", "x", "--keep-time", "--title", "y"]) }
+        #expect(throws: CalUtilError.self) {
+            try EditOptions.parse(["--id", "x", "--timezone", "UTC", "--keep-time", "--start", "2026-11-15T13:00"])
+        }
+        var allDay = tour
+        allDay.isAllDay = true
+        #expect(throws: CalUtilError.self) { try edit(["--timezone", "Pacific/Auckland", "--keep-time"], allDay) }
+        #expect(throws: CalUtilError.self) { try edit(["--timezone", "Pacific/Auckland", "--keep-time", "--all-day"]) }
+    }
+}

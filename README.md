@@ -155,7 +155,8 @@ as `calutil search` does (`--match-title`, `--match-location`, `--match-notes`,
 one event; otherwise the matches are listed and nothing happens.
 
 `edit` takes the same options as `add`, and only what you give changes: `--start` moves the
-event and keeps its length (a day alone keeps the time too), `--timezone` keeps the clock time,
+event and keeps its length (a day alone keeps the time too), `--timezone` keeps the clock time
+(or, with `--keep-time`, the moment: an event stored as 00:00 GMT becomes 13:00 in Auckland),
 `--calendar` moves it to another calendar, a new `--location` gets a new map point, and `--map`
 on its own adds one. It shows what would change, as `-` old and `+` new lines, and changes
 nothing without `--save`. `delete` shows the event and deletes nothing without `--yes`.

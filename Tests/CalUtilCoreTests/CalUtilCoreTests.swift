@@ -650,7 +650,7 @@ let concert = Template(name: "concert", notes: "Bring tickets", calendar: "Perso
         func message(_ body: () throws -> Any) -> String {
             do { _ = try body(); return "" } catch { return (error as? CalUtilError)?.message ?? "" }
         }
-        #expect(message { try Invocation.parse(["list", "--tz", "Europe/Paris"]) }.contains("unknown option --tz for 'calutil list'"))
+        #expect(message { try Invocation.parse(["list", "--title", "x"]) }.contains("unknown option --title for 'calutil list'"))
         #expect(message { try AddOptions.parse(["--tz"]) } == "--tz needs a value")
         #expect(message { try AddOptions.parse(["--tz", "UTC", "--timezone", "UTC"]) } == "--timezone / --tz was given more than once")
         #expect(message { try AddOptions.parse(["--save", "--open"]) } == "--save and --open can't be combined; pick one")
@@ -1149,5 +1149,50 @@ let concert = Template(name: "concert", notes: "Bring tickets", calendar: "Perso
                       + none
             """)
         #expect(Editor.describe(concert) == "“Prokofiev's Seconds Piano Concerto” on Sat 11 Sep 2027 20:00 in iCloud/Home")
+    }
+}
+
+@Suite struct ListTimeZoneTests {
+    let sydney = TimeZone(identifier: "Australia/Sydney")!
+    let copenhagen = TimeZone(identifier: "Europe/Copenhagen")!
+    let now = utc("2026-11-07T01:00:00Z")
+
+    @Test func parsing() throws {
+        #expect(try ListOptions.parse(["friday", "--tz", "Europe/Copenhagen"]).timezone == "Europe/Copenhagen")
+        #expect(try SearchOptions.parse(["x", "--timezone", "UTC"]).timezone == "UTC")
+        #expect(throws: CalUtilError.self) { try ListOptions.parse(["--tz", "UTC", "--timezone", "UTC"]) }
+        #expect(throws: CalUtilError.self) { try DateParsing.timeZone(named: "Mars/Olympus") }
+        #expect(try DateParsing.timeZone(named: " Europe/Copenhagen ").identifier == "Europe/Copenhagen")
+    }
+
+    @Test func timedEventsMoveAndAllDayEventsKeepTheirDate() throws {
+        // Copenhagen's Saturday: Sat 14 Nov 00:00 CET = 13 Nov 23:00 UTC.
+        let first = try DateParsing.startOfDay(year: 2026, month: 11, day: 14, timeZone: copenhagen)
+        let end = DateParsing.startOfDay(1, after: first, calendar: DateParsing.gregorian(copenhagen))
+        let marathon = ListedEvent(title: "Marathon", calendar: "Home", calendarFullName: "iCloud/Home",
+                                   start: utc("2026-11-13T17:00:00Z"), end: utc("2026-11-13T22:00:00Z"),  // 04:00–09:00 Sydney
+                                   timeZone: TimeZone(identifier: "Pacific/Auckland"))
+        let gig = ListedEvent(title: "Gig", calendar: "Home", calendarFullName: "iCloud/Home",
+                              start: utc("2026-11-14T08:00:00Z"), end: utc("2026-11-14T10:00:00Z"),  // Sat 19:00 Sydney
+                              timeZone: sydney)
+        // As EventKit gives a Saturday all-day event on a Mac in Sydney.
+        let holiday = ListedEvent(title: "Holiday", calendar: "Hols", calendarFullName: "Hols",
+                                  start: utc("2026-11-13T13:00:00Z"), end: utc("2026-11-14T12:59:59Z"), isAllDay: true)
+        let sunday = ListedEvent(title: "Sunday thing", calendar: "Hols", calendarFullName: "Hols",
+                                 start: utc("2026-11-14T13:00:00Z"), end: utc("2026-11-15T12:59:59Z"), isAllDay: true)
+
+        let events = EventList.prepare([marathon, gig, holiday, sunday], local: sydney, zone: copenhagen, from: first, to: end)
+        #expect(events.map(\.title) == ["Gig", "Holiday"])  // the marathon is on Friday in Copenhagen
+        #expect(events[1].start == first)
+        let text = EventList.render(events, from: first, days: 1, timeZone: copenhagen, now: now, verbose: false)
+        #expect(text == """
+            Sat 14 Nov 2026
+              all day      Holiday  Hols
+              09:00–11:00  Gig      Home  (19:00 Australia/Sydney)
+            """)
+        #expect(EventList.zoneNote(copenhagen, local: sydney, at: first) == "Times are in Europe/Copenhagen (UTC+1).")
+        #expect(EventList.zoneNote(sydney, local: sydney, at: first) == nil)
+        // In the Mac's own zone nothing moves.
+        #expect(EventList.prepare([holiday], local: sydney, zone: sydney, from: holiday.start, to: holiday.end) == [holiday])
     }
 }

@@ -105,6 +105,7 @@ program and ask again.
 calutil list                                  # today
 calutil list friday --calendar Home --calendar Family
 calutil list 2026-12-20 --days 14 --verbose
+calutil list friday --timezone Europe/Copenhagen   # times as they are in Copenhagen
 ```
 
 ```
@@ -113,7 +114,9 @@ Sat 14 Nov 2026
   04:00–09:00  Lake Shore Marathon  Home                 (06:00 Pacific/Auckland)  ⏰ 1d
 ```
 
-Times are in this Mac's time zone; an event set in another zone also shows its own time.
+Times are in this Mac's time zone, or the one `--timezone` (`--tz`) names: the days are then
+split, and day words like `friday` read, in that zone, and all-day events stay on their dates.
+An event set in another zone also shows its own time.
 Events that run past midnight show on each day (`22:00–…`, then `…–01:30`). With `--days`,
 days without events are left out. `--calendar` takes the same names and ids as `add`, and a
 name shared by several calendars includes all of them. Titles longer than 40 characters are

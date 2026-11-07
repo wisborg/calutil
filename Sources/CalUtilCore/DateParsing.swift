@@ -166,6 +166,14 @@ public enum DateParsing {
         return try makeDate(year: input.year, month: input.month, day: input.day, time: time, timeZone: zone)
     }
 
+    /// A time zone by name, as --timezone takes it.
+    public static func timeZone(named name: String) throws -> TimeZone {
+        guard let zone = TimeZone(identifier: name.trimmingCharacters(in: .whitespaces)) else {
+            throw CalUtilError("unknown time zone '\(name)': use a name such as Australia/Sydney or Europe/Copenhagen")
+        }
+        return zone
+    }
+
     public static func gregorian(_ timeZone: TimeZone) -> Calendar {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZone

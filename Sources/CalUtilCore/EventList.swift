@@ -44,8 +44,40 @@ public struct ListedEvent: Equatable, Sendable {
     }
 }
 
-/// Renders `calutil list` output: events grouped by day, in the local time zone.
+/// Renders `calutil list` output: events grouped by day, in the local time zone (or --timezone).
 public enum EventList {
+    /// Events fetched for `first..<end` (with some margin) made ready to show in `zone`.
+    /// EventKit gives all-day events in `local`, the Mac's zone, but they float: one on
+    /// Saturday is on Saturday in any zone, so it is moved onto that date in `zone`. Events
+    /// outside the range (the margin) are dropped.
+    public static func prepare(_ events: [ListedEvent], local: TimeZone, zone: TimeZone,
+                               from first: Date, to end: Date) -> [ListedEvent] {
+        let localCalendar = DateParsing.gregorian(local)
+        let calendar = DateParsing.gregorian(zone)
+        func sameDay(_ date: Date) -> Date? {
+            let c = localCalendar.dateComponents([.year, .month, .day], from: date)
+            return try? DateParsing.startOfDay(year: c.year!, month: c.month!, day: c.day!, timeZone: zone)
+        }
+        return events.compactMap { event in
+            var event = event
+            if event.isAllDay, local.identifier != zone.identifier,
+               let start = sameDay(event.start), let lastDay = sameDay(event.end) {
+                event.start = start
+                // EventKit's all-day end is the last moment of the last day.
+                event.end = DateParsing.startOfDay(1, after: lastDay, calendar: calendar).addingTimeInterval(-1)
+            }
+            // A zero-length event still counts as being on its day.
+            let overlaps = event.start < end && max(event.end, event.start.addingTimeInterval(1)) > first
+            return overlaps ? event : nil
+        }
+    }
+
+    /// "Times are in Europe/Copenhagen (UTC+1)." when that isn't the Mac's zone.
+    public static func zoneNote(_ zone: TimeZone, local: TimeZone, at date: Date) -> String? {
+        guard zone.identifier != local.identifier else { return nil }
+        return "Times are in \(Summary.zoneLabel(zone, at: date))."
+    }
+
     /// Longer titles are cut short with "…" (and shown in full with --verbose).
     static let maxTitleWidth = 40
 

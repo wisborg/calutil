@@ -15,12 +15,14 @@ public struct SearchOptions: Equatable, Sendable {
     /// Empty means all calendars.
     public var calendars: [String] = []
     public var verbose = false
+    /// Show the times in this zone instead of the Mac's.
+    public var timezone: String?
 
     public init() {}
 
     public static func parse(_ arguments: [String]) throws -> SearchOptions {
         var options = SearchOptions()
-        var scanner = ArgumentScanner(arguments, command: "search")
+        var scanner = ArgumentScanner(arguments, command: "search", aliases: ["--tz": "--timezone"])
         var words: [String] = []
         while try scanner.next() {
             switch scanner.name {
@@ -30,6 +32,7 @@ public struct SearchOptions: Equatable, Sendable {
             case "--from": options.from = try scanner.single()
             case "--to": options.to = try scanner.single()
             case "--calendar": options.calendars.append(try scanner.value())
+            case "--timezone": options.timezone = try scanner.single()
             case "-v", "--verbose": try scanner.flag(); options.verbose = true
             default:
                 if scanner.isOption { throw scanner.unexpected() }

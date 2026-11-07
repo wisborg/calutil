@@ -140,7 +140,7 @@ public enum Help {
 
     USAGE
       calutil search [TEXT...] [--title T] [--location L] [--notes N]
-                     [--from DAY] [--to DAY] [--calendar NAME]... [--verbose]
+                     [--from DAY] [--to DAY] [--calendar NAME]... [--timezone ZONE] [--verbose]
 
       Every word of TEXT must appear in the event's title, location or notes (any mix of
       them). --title, --location and --notes look in that field only. When several are
@@ -154,6 +154,7 @@ public enum Help {
                            give an earlier day, e.g. --from 2025-01-01.
       --to DAY             Last day to search (default: a year after --from)
       --calendar NAME      Only this calendar; repeat for more (default: all)
+      --timezone ZONE      Show the times in this zone instead of this Mac's (as for list)
       -v, --verbose        Also show the full title, time zone, location, notes, URL,
                            calendar and event id
 
@@ -246,7 +247,7 @@ public enum Help {
     calutil list: show the events on a day, or over several days
 
     USAGE
-      calutil list [DAY] [--days N] [--calendar NAME]... [--verbose]
+      calutil list [DAY] [--days N] [--calendar NAME]... [--timezone ZONE] [--verbose]
 
       DAY is today (the default), tomorrow, yesterday, a weekday (friday: the next one, today
       included) or a date (2026-11-14). Times are in this Mac's time zone; an event set in
@@ -257,6 +258,9 @@ public enum Help {
                            left out
       --calendar NAME      Only this calendar; repeat for more (default: all). Takes the same
                            names and ids as 'calutil add --calendar'.
+      --timezone ZONE      Show the times, and split the days, in this zone instead of this
+                           Mac's, e.g. Europe/Copenhagen (--tz for short). DAY is a day there.
+                           All-day events stay on their dates.
       -v, --verbose        Also show the full title, time zone, location, notes, URL,
                            calendar and event id
 
@@ -264,6 +268,7 @@ public enum Help {
       calutil list
       calutil list friday --calendar Home --calendar Family
       calutil list 2026-12-20 --days 14
+      calutil list friday --timezone Europe/Copenhagen
     """
 
     static let calendars = """

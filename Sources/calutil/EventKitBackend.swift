@@ -247,27 +247,33 @@ enum EventKitBackend {
     // MARK: - Listing events
 
     static func listEvents(_ options: ListOptions) throws -> String {
-        let zone = TimeZone.current
-        let calendar = DateParsing.gregorian(zone)
+        let local = TimeZone.current
         let now = Date()
         // Check the input before asking for Calendar access.
+        let zone = try options.timezone.map(DateParsing.timeZone(named:)) ?? local
+        let calendar = DateParsing.gregorian(zone)
         let day = try DateParsing.parseDay(options.day ?? "today", now: now, timeZone: zone)
         let first = try DateParsing.startOfDay(year: day.year, month: day.month, day: day.day, timeZone: zone)
         let end = DateParsing.startOfDay(options.days, after: first, calendar: calendar)
 
         let store = try authorizedStore()
         let calendars = options.calendars.isEmpty ? nil : try calendarsToRead(options.calendars, in: store)
-        let predicate = store.predicateForEvents(withStart: first, end: end, calendars: calendars)
-        let events = store.events(matching: predicate).map(listed)
-        return EventList.render(events, from: first, days: options.days, timeZone: zone, now: now,
-                                verbose: options.verbose)
+        // A day's margin each side: all-day events are fetched by the Mac's zone, not `zone`.
+        let predicate = store.predicateForEvents(withStart: first.addingTimeInterval(-86_400),
+                                                 end: end.addingTimeInterval(86_400), calendars: calendars)
+        let events = EventList.prepare(store.events(matching: predicate).map(listed), local: local, zone: zone,
+                                       from: first, to: end)
+        let listing = EventList.render(events, from: first, days: options.days, timeZone: zone, now: now,
+                                       verbose: options.verbose)
+        return [EventList.zoneNote(zone, local: local, at: first), listing].compactMap { $0 }.joined(separator: "\n\n")
     }
 
     static func searchEvents(_ options: SearchOptions) throws -> String {
-        let zone = TimeZone.current
-        let calendar = DateParsing.gregorian(zone)
+        let local = TimeZone.current
         let now = Date()
         // Check the input before asking for Calendar access.
+        let zone = try options.timezone.map(DateParsing.timeZone(named:)) ?? local
+        let calendar = DateParsing.gregorian(zone)
         let range = try EventSearch.range(options, now: now, timeZone: zone)
 
         let store = try authorizedStore()
@@ -275,15 +281,20 @@ enum EventKitBackend {
         // An event that spans two windows comes back from both; keep it once.
         var seen: Set<String> = []
         var events: [ListedEvent] = []
-        for window in EventSearch.windows(from: range.first, to: range.end, calendar: calendar) {
+        // A day's margin each side: all-day events are fetched by the Mac's zone, not `zone`.
+        let windows = EventSearch.windows(from: range.first.addingTimeInterval(-86_400),
+                                          to: range.end.addingTimeInterval(86_400), calendar: calendar)
+        for window in windows {
             let predicate = store.predicateForEvents(withStart: window.start, end: window.end, calendars: calendars)
             for event in store.events(matching: predicate) {
                 let key = "\(event.eventIdentifier ?? UUID().uuidString)|\(event.startDate.timeIntervalSince1970)"
                 if seen.insert(key).inserted { events.append(listed(event)) }
             }
         }
-        return EventSearch.render(events, options: options, first: range.first, end: range.end,
-                                  days: range.days, timeZone: zone, now: now)
+        events = EventList.prepare(events, local: local, zone: zone, from: range.first, to: range.end)
+        let found = EventSearch.render(events, options: options, first: range.first, end: range.end,
+                                       days: range.days, timeZone: zone, now: now)
+        return [EventList.zoneNote(zone, local: local, at: range.first), found].compactMap { $0 }.joined(separator: "\n\n")
     }
 
     static func listed(_ event: EKEvent) -> ListedEvent {

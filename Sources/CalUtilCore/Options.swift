@@ -83,6 +83,8 @@ public struct ListOptions: Equatable, Sendable {
     /// Empty means all calendars.
     public var calendars: [String] = []
     public var verbose = false
+    /// Show the times in this zone instead of the Mac's.
+    public var timezone: String?
 
     public init() {}
 
@@ -90,7 +92,7 @@ public struct ListOptions: Equatable, Sendable {
 
     public static func parse(_ arguments: [String]) throws -> ListOptions {
         var options = ListOptions()
-        var scanner = ArgumentScanner(arguments, command: "list")
+        var scanner = ArgumentScanner(arguments, command: "list", aliases: ["--tz": "--timezone"])
         while try scanner.next() {
             switch scanner.name {
             case "--days":
@@ -100,6 +102,7 @@ public struct ListOptions: Equatable, Sendable {
                 }
                 options.days = days
             case "--calendar": options.calendars.append(try scanner.value())
+            case "--timezone": options.timezone = try scanner.single()
             case "-v", "--verbose": try scanner.flag(); options.verbose = true
             default:
                 if scanner.isOption { throw scanner.unexpected() }

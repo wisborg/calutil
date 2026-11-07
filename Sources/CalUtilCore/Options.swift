@@ -7,13 +7,19 @@ public enum Invocation: Equatable, Sendable {
     case search(SearchOptions)
     case edit(EditOptions)
     case delete(DeleteOptions)
+    /// Print the completion script for a shell.
+    case completionScript(shell: String)
+    /// Install the completion script where the shell reads it; nil shell means $SHELL's.
+    case completionInstall(shell: String, dir: String?, dryRun: Bool)
+    /// What the completion scripts call: suggestions for the words typed so far.
+    case complete([String])
     case calendars(verbose: Bool)
     case templates(path: String?, json: Bool)
     /// Help, for one command when given.
     case help(String?)
     case version
 
-    public static let commands = ["add", "list", "search", "edit", "delete", "calendars", "templates", "help", "version"]
+    public static let commands = ["add", "list", "search", "edit", "delete", "completion", "calendars", "templates", "help", "version"]
 
     public static func parse(_ arguments: [String]) throws -> Invocation {
         guard let command = arguments.first else { return .help(nil) }
@@ -38,6 +44,40 @@ public enum Invocation: Equatable, Sendable {
             return try helpOr("search") { .search(try SearchOptions.parse(rest)) }
         case "edit":
             return try helpOr("edit") { .edit(try EditOptions.parse(rest)) }
+        case "__complete":
+            let words = rest.first == "--" ? Array(rest.dropFirst()) : rest
+            return .complete(words.isEmpty ? [""] : words)
+        case "completion":
+            return try helpOr("completion") {
+                guard let what = rest.first else { return .help("completion") }
+                if Completion.shells.contains(what) {
+                    guard rest.count == 1 else {
+                        throw CalUtilError("'calutil completion \(what)' takes no options (see calutil help completion)", usage: true)
+                    }
+                    return .completionScript(shell: what)
+                }
+                guard what == "install" else {
+                    if what == "-h" || what == "--help" { return .help("completion") }
+                    throw CalUtilError("use 'calutil completion zsh', 'bash' or 'install' (see calutil help completion)", usage: true)
+                }
+                var scanner = ArgumentScanner(Array(rest.dropFirst()), command: "completion install")
+                var shell = "auto"
+                var dir: String?
+                var dryRun = false
+                while try scanner.next() {
+                    switch scanner.name {
+                    case "--shell":
+                        shell = try scanner.single()
+                        guard ["zsh", "bash", "all", "auto"].contains(shell) else {
+                            throw CalUtilError("--shell takes zsh, bash, all or auto, not '\(shell)'", usage: true)
+                        }
+                    case "--dir": dir = (try scanner.single() as NSString).expandingTildeInPath
+                    case "--dry-run": try scanner.flag(); dryRun = true
+                    default: throw scanner.unexpected()
+                    }
+                }
+                return .completionInstall(shell: shell, dir: dir, dryRun: dryRun)
+            }
         case "delete":
             return try helpOr("delete") { .delete(try DeleteOptions.parse(rest)) }
         case "calendars":

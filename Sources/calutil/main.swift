@@ -69,6 +69,8 @@ func openInCalendar(_ spec: EventSpec) throws -> URL {
 func needsCalendarAccess(_ invocation: Invocation) -> Bool {
     switch invocation {
     case .calendars, .list, .search, .edit, .delete: true
+    case .complete(let words): Completion.needsCalendars(words)
+    case .completionScript, .completionInstall: false
     case .add(let options): options.action == .save
     case .templates, .help, .version: false
     }
@@ -98,6 +100,12 @@ func run() -> Int32 {
             try EventKitBackend.edit(options)
         case .delete(let options):
             try EventKitBackend.delete(options)
+        case .completionScript(let shell):
+            print(Completion.script(for: shell)!, terminator: "")
+        case .completionInstall(let shell, let dir, let dryRun):
+            try CompletionCommands.install(shell: shell, dir: dir, dryRun: dryRun)
+        case .complete(let words):
+            CompletionCommands.complete(words)
         case .add(let options):
             try add(options)
         }

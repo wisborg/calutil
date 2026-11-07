@@ -1196,3 +1196,92 @@ let concert = Template(name: "concert", notes: "Bring tickets", calendar: "Perso
         #expect(EventList.prepare([holiday], local: sydney, zone: sydney, from: holiday.start, to: holiday.end) == [holiday])
     }
 }
+
+@Suite struct CompletionTests {
+    let source = Completion.Source(
+        templates: { path in path == "other.json" ? ["other"] : ["concert", "birthday"] },
+        calendars: { [Completion.Candidate("Home", "iCloud/Home"), Completion.Candidate("Family", "several calendars")] },
+        timeZones: { ["Europe/Copenhagen", "Australia/Sydney"] })
+
+    func values(_ words: [String]) -> [String] {
+        guard case .values(let candidates) = Completion.reply(for: words, source: source) else { return ["(not values)"] }
+        return candidates.map(\.value)
+    }
+
+    @Test func commandsAndOptions() {
+        #expect(values([""]).starts(with: ["add", "list", "search", "edit", "delete"]))
+        #expect(values(["add", "--"]).contains("--template"))
+        #expect(values(["edit", "-"]).contains("--match-calendar"))
+        #expect(!values(["delete", "--"]).contains("--title"))
+        #expect(values(["help", ""]).contains("search"))
+        #expect(values(["completion", ""]) == ["zsh", "bash", "install"])
+        #expect(values(["completion", "install", "--"]) == ["--shell", "--dir", "--dry-run", "--help"])
+    }
+
+    @Test func values() {
+        #expect(values(["add", "--template", ""]) == ["birthday", "concert"])
+        #expect(values(["add", "--templates", "other.json", "--template", ""]) == ["other"])
+        #expect(values(["add", "--calendar", ""]) == ["Home", "Family"])
+        #expect(values(["list", "--tz", "Eu"]) == ["Europe/Copenhagen", "Australia/Sydney"])  // the shell filters
+        #expect(values(["list", "--timezone=Eu"]) == ["--timezone=Europe/Copenhagen", "--timezone=Australia/Sydney"])
+        #expect(values(["list", ""]).first == "today")
+        #expect(values(["search", "--from", ""]).contains("friday"))
+        #expect(values(["add", "--alarm", ""]).contains("1w"))
+        #expect(values(["add", "--title", ""]).isEmpty)      // free text: nothing to offer
+        #expect(values(["add", "--save", ""]).isEmpty)       // after a flag, nothing positional
+        #expect(Completion.reply(for: ["add", "--templates", ""], source: source) == .files)
+        #expect(Completion.reply(for: ["completion", "install", "--dir", ""], source: source) == .directories)
+    }
+
+    @Test func onlyCalendarNamesNeedCalendar() throws {
+        #expect(Completion.needsCalendars(["add", "--calendar", ""]))
+        #expect(Completion.needsCalendars(["edit", "--match-calendar=Ho"]))
+        #expect(!Completion.needsCalendars(["add", "--title", ""]))
+        #expect(!Completion.needsCalendars(["list", ""]))
+        #expect(try Invocation.parse(["__complete", "add", "--calendar", ""]) == .complete(["add", "--calendar", ""]))
+        #expect(try Invocation.parse(["__complete"]) == .complete([""]))
+    }
+
+    @Test func output() {
+        #expect(Completion.render(.values([Completion.Candidate("--save", "add it"), Completion.Candidate("x")])) == "--save\tadd it\nx")
+        #expect(Completion.render(.files) == ":files")
+        #expect(Completion.script(for: "zsh")!.hasPrefix("#compdef calutil\n"))
+        #expect(Completion.script(for: "bash")!.contains("complete -F _calutil calutil"))
+        #expect(Completion.fileName(for: "zsh") == "_calutil" && Completion.fileName(for: "bash") == "calutil")
+    }
+
+    @Test func parsing() throws {
+        #expect(try Invocation.parse(["completion", "zsh"]) == .completionScript(shell: "zsh"))
+        #expect(try Invocation.parse(["completion", "install"]) == .completionInstall(shell: "auto", dir: nil, dryRun: false))
+        #expect(try Invocation.parse(["completion", "install", "--shell", "bash", "--dir", "/tmp/x", "--dry-run"])
+                == .completionInstall(shell: "bash", dir: "/tmp/x", dryRun: true))
+        #expect(try Invocation.parse(["completion"]) == .help("completion"))
+        #expect(throws: CalUtilError.self) { try Invocation.parse(["completion", "fish"]) }
+        #expect(throws: CalUtilError.self) { try Invocation.parse(["completion", "install", "--shell", "fish"]) }
+        #expect(throws: CalUtilError.self) { try Invocation.parse(["completion", "zsh", "--dry-run"]) }
+    }
+
+    @Test func installDirectoryScore() {
+        let home = "/Users/me"
+        #expect(CompletionInstall.score("/opt/homebrew/share/zsh/site-functions", home: home) == 2)
+        #expect(CompletionInstall.score("/Users/me/.oh-my-zsh/completions", home: home) == 11)
+        #expect(CompletionInstall.score("/Users/me/.local/share/zsh/site-functions", home: home) == 12)
+        #expect(CompletionInstall.score("/Users/me/.oh-my-zsh/cache/completions", home: home) == 0)
+        #expect(CompletionInstall.score("/Users/me/.oh-my-zsh/functions", home: home) == 0)
+    }
+
+    /// Every option Tab offers must be one the command accepts.
+    @Test func everyOfferedOptionIsAccepted() {
+        for (command, options) in Completion.options {
+            for option in options {
+                let args = command.split(separator: " ").map(String.init) + [option.name]
+                    + (option.kind == .flag ? [] : ["x"])
+                do {
+                    _ = try Invocation.parse(args)
+                } catch let error as CalUtilError {
+                    #expect(!error.message.contains("unknown option"), "\(command) \(option.name): \(error.message)")
+                } catch {}
+            }
+        }
+    }
+}

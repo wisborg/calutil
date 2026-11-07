@@ -20,6 +20,7 @@ calutil calendars --verbose
 | `delete`    | Delete an event (a dry run unless you pass `--yes`)             |
 | `calendars` | List your calendars; `--verbose` adds ids, colours and contents |
 | `templates` | List the templates for `add`                                    |
+| `completion`| Tab completion for zsh and bash (`calutil completion install`)  |
 | `help`      | `calutil help <command>` shows every option of a command        |
 
 ## Adding events
@@ -43,6 +44,7 @@ Needs macOS 14 or later and Swift 6 (Xcode or the command-line tools).
 ```
 make install              # builds and installs to ~/.local/bin/calutil (PREFIX=... to change)
 make install-templates    # copies templates.example.json to ~/.config/calutil/templates.json
+calutil completion install  # Tab completion for your shell (see Shell completion)
 ```
 
 ## Calendar access
@@ -184,6 +186,25 @@ Settings: `title`, `location`, `map`, `notes`, `url`, `calendar`, `timezone`, `t
 
 Because of the comments, tools such as `jq` can't read the file directly. `calutil templates
 --json` prints it as strict JSON instead: `calutil templates --json | jq .concert`.
+
+## Shell completion
+
+```
+calutil completion install
+```
+
+Writes the completion script into a directory your shell searches, creating it if needed,
+and then says whether that directory is one your shell actually reads. If it is not, it
+prints the line to add and where to add it: a completion script in an unsearched directory
+does nothing and says nothing about it. It picks the destination for you (`--shell
+zsh|bash|all`, `--dir` to override, `--dry-run` to see the choice first) and never edits
+your startup files. `calutil completion zsh` prints the script if you would rather place it
+yourself. (This is how the Go tools built on cobrakit do it.)
+
+Tab then offers commands and options with what they do, and for values: your template
+names, your calendars (once calutil has Calendar access; Tab never asks for it), time
+zones, day words, durations and alarms. They are read each time, so a new template or
+calendar is offered straight away.
 
 ## Development
 

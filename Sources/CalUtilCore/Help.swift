@@ -8,6 +8,7 @@ public enum Help {
         case "list": list
         case "search": search
         case "edit": edit
+        case "completion": completion
         case "delete": delete
         case "calendars": calendars
         case "templates": templates
@@ -31,6 +32,7 @@ public enum Help {
       delete       Delete an event (a dry run unless you pass --yes)
       calendars    List your calendars
       templates    List the event templates for 'add'
+      completion   Tab completion for zsh and bash ('calutil completion install')
       help [CMD]   Show help, for one command if given
       version      Show the version
 
@@ -164,6 +166,29 @@ public enum Help {
       calutil search dvorak
       calutil search --location "opera house" --from 2026-01-01 --to 2027-12-31
       calutil search concert --calendar Home --verbose
+    """
+
+    static let completion = """
+    calutil completion: Tab completion for zsh and bash
+
+    USAGE
+      calutil completion install [--shell zsh|bash|all|auto] [--dir DIR] [--dry-run]
+      calutil completion zsh|bash
+
+      'install' writes the completion script into a directory your shell reads, creating
+      it if needed, and then says whether that directory is one your shell actually reads.
+      If it is not, it prints the line to add and where. It never edits your startup files.
+
+      'zsh' and 'bash' print the script, if you would rather place it yourself.
+
+      Tab then offers commands and options (with what they do), your templates, your
+      calendars, time zones, day words, durations and alarms, read as they are each time.
+
+    OPTIONS (install)
+      --shell SHELL        zsh, bash, all, or auto: the shell $SHELL names (the default;
+                           both if it is neither)
+      --dir DIR            Install into this directory instead (needs one --shell)
+      --dry-run            Say where it would go; write nothing
     """
 
     static let edit = """

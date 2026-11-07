@@ -198,7 +198,7 @@ public enum Help {
       calutil edit --id ID [--on DAY] [changes] [--future] [--save]
       calutil edit --match TEXT [--match-title T] [--match-location L] [--match-notes N]
                    [--match-calendar NAME]... [--on DAY | --from DAY --to DAY]
-                   [changes] [--future] [--save]
+                   [changes] [--future | --all] [--save]
 
       Without --save this is a dry run: it shows what would change and changes nothing.
 
@@ -228,11 +228,20 @@ public enum Help {
     REPEATING EVENTS
       --future             Change this and the later occurrences (default: only this one)
 
+    SEVERAL EVENTS
+      --all                Change every event the --match search finds, not just one. Only
+                           changes that suit them all: --location, --notes, --url, --calendar,
+                           --timezone (with or without --keep-time), the alarm options and the
+                           map options; not --title or the times. An all-day event keeps its
+                           (lack of a) time zone. Each event's changes are shown, and with
+                           --save they are made together: all of them or none.
+
     EXAMPLES
       calutil edit --match prokofiev --title "Prokofiev's Second Piano Concerto"
       calutil edit --match "lena berg" --on 2027-07-05 --start 2027-07-05T19:30 --save
       calutil edit --id 1A2B3C4D-…:5E6F7A8B-… --map "Sydney Opera House" --save
       calutil edit --match "harbour cruise" --timezone Pacific/Auckland --keep-time
+      calutil edit --match-notes "Trip 2026" --all --tz Pacific/Auckland --keep-time
     """
 
     static let delete = """

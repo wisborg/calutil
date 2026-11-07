@@ -1338,3 +1338,36 @@ let concert = Template(name: "concert", notes: "Bring tickets", calendar: "Perso
         #expect(throws: CalUtilError.self) { try edit(["--timezone", "Pacific/Auckland", "--keep-time", "--all-day"]) }
     }
 }
+
+@Suite struct EditAllTests {
+    func parse(_ args: [String]) throws -> EditOptions { try EditOptions.parse(args) }
+
+    @Test func parsing() throws {
+        let o = try parse(["--match-notes", "Trip 2026", "--all", "--tz", "Pacific/Auckland", "--keep-time"])
+        #expect(o.all && o.keepTime && o.changes.timezone == "Pacific/Auckland")
+        #expect(try parse(["--match", "concert", "--all", "--add-alarm", "1d", "--location", "Hall",
+                           "--notes", "n", "--url", "https://x.example", "--calendar", "Home", "--no-map"]).all)
+    }
+
+    @Test func refusesWhatShouldNotBeTheSameEverywhere() {
+        for args in [["--title", "x"], ["--start", "2027-01-01T10:00"], ["--end", "11:00"], ["--duration", "1h"],
+                     ["--all-day"], ["--no-all-day"]] {
+            #expect(throws: CalUtilError.self, "\(args)") { try parse(["--match", "x", "--all"] + args) }
+        }
+        #expect(throws: CalUtilError.self) { try parse(["--id", "x", "--all", "--notes", "n"]) }
+        #expect(throws: CalUtilError.self) { try parse(["--match", "x", "--all", "--future", "--notes", "n"]) }
+        #expect(throws: CalUtilError.self) { try parse(["--match", "x", "--all"]) }  // nothing to change
+    }
+
+    @Test func allDayEventsKeepTheirTimeZone() throws {
+        var o = AddOptions()
+        o.timezone = "Pacific/Auckland"
+        #expect(Editor.bulkChanges(o, keepTime: true, forAllDay: true) == nil)  // nothing else to do
+        let timed = Editor.bulkChanges(o, keepTime: true, forAllDay: false)
+        #expect(timed?.changes.timezone == "Pacific/Auckland" && timed?.keepTime == true && timed?.note == nil)
+        o.notes = "Trip"
+        let allDay = Editor.bulkChanges(o, keepTime: true, forAllDay: true)
+        #expect(allDay?.changes.timezone == nil && allDay?.changes.notes == "Trip" && allDay?.keepTime == false)
+        #expect(allDay?.note != nil)
+    }
+}

@@ -12,8 +12,19 @@ enum MapSearch {
 
     /// The best matches for `query`, at most `Places.maxMatches`. Throws when the search
     /// fails (no network) or takes longer than `timeout`.
+    /// Searches already made in this run: `edit --all` gives many events the same location.
+    @MainActor private static var cache: [String: [Place]] = [:]
+
     @MainActor
     static func search(_ query: String, timeout: TimeInterval = 10) throws -> [Place] {
+        if let places = cache[query] { return places }
+        let places = try searchMaps(query, timeout: timeout)
+        cache[query] = places
+        return places
+    }
+
+    @MainActor
+    private static func searchMaps(_ query: String, timeout: TimeInterval) throws -> [Place] {
         let request = MKLocalSearch.Request()
         request.naturalLanguageQuery = query
         let outcome = Outcome()

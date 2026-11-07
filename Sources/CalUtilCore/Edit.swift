@@ -65,6 +65,8 @@ public struct EditOptions: Equatable, Sendable {
     public var future = false
     /// With --timezone: keep the moment the event happens, not its clock time.
     public var keepTime = false
+    /// Change every event the --match search finds, not just one.
+    public var all = false
     public var save = false
 
     public init() {}
@@ -78,6 +80,7 @@ public struct EditOptions: Equatable, Sendable {
             case "--dry-run": try scanner.flag(); options.save = false
             case "--future": try scanner.flag(); options.future = true
             case "--keep-time": try scanner.flag(); options.keepTime = true
+            case "--all": try scanner.flag(); options.all = true
             default:
                 if try options.selection.take(&scanner) { continue }
                 if try options.changes.takeField(&scanner) { continue }
@@ -94,6 +97,7 @@ public struct EditOptions: Equatable, Sendable {
                 throw CalUtilError("--keep-time keeps the start, so it can't be combined with --start", usage: true)
             }
         }
+        if options.all { try Editor.checkBulk(options) }
         guard options.changes.hasFields else {
             throw CalUtilError("nothing to change: give the new values, e.g. --title, --start or --location (see calutil help edit)", usage: true)
         }
@@ -137,6 +141,36 @@ extension AddOptions {
 }
 
 public enum Editor {
+    /// What `edit --all` may change: the same thing on every event, never their titles or times.
+    public static let bulkOptions = "--location, --notes, --url, --calendar, --timezone (with or without --keep-time), --alarm, --add-alarm, --no-alarms, --map, --map-match and --no-map"
+
+    static func checkBulk(_ options: EditOptions) throws {
+        guard options.selection.id == nil else {
+            throw CalUtilError("--all changes every event a --match search finds; it can't be used with --id", usage: true)
+        }
+        guard !options.future else {
+            throw CalUtilError("--all can't be combined with --future: each matching occurrence is changed on its own", usage: true)
+        }
+        let o = options.changes
+        let refused = [("--title", o.title != nil), ("--start", o.start != nil), ("--end", o.end != nil),
+                       ("--duration", o.duration != nil), (o.allDay == false ? "--no-all-day" : "--all-day", o.allDay != nil)]
+            .filter(\.1).map(\.0)
+        guard refused.isEmpty else {
+            throw CalUtilError("--all changes the same thing on every event, so it can't take \(refused.joined(separator: ", ")); it can change \(bulkOptions)", usage: true)
+        }
+    }
+
+    /// The changes for one event of `edit --all`: an all-day event has no time zone, so
+    /// --timezone and --keep-time are left out for it (nil when nothing else is left).
+    public static func bulkChanges(_ o: AddOptions, keepTime: Bool, forAllDay isAllDay: Bool)
+        -> (changes: AddOptions, keepTime: Bool, note: String?)? {
+        guard isAllDay, o.timezone != nil else { return (o, keepTime, nil) }
+        var changes = o
+        changes.timezone = nil
+        guard changes.hasFields else { return nil }
+        return (changes, false, "the time zone is left out: it's an all-day event")
+    }
+
     /// The event with the changes made. Only what is given changes: moving the start keeps the
     /// length, a new location is looked up on the map (by the caller, from `map`), and the
     /// existing alarms are kept unless replaced.

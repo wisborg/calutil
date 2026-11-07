@@ -164,6 +164,17 @@ nothing without `--save`. `delete` shows the event and deletes nothing without `
 A repeating event has one id for all its occurrences: with `--id`, say which with `--on DAY`.
 Only that occurrence changes, unless you add `--future` for it and the later ones too.
 
+`edit --all` changes every event a `--match` search finds, for changes that suit them all:
+`--location`, `--notes`, `--url`, `--calendar`, `--timezone` (with or without `--keep-time`),
+the alarm options and the map options, but not `--title` or the times. All-day events are left
+out of a time zone change. It shows each event's changes, and with `--save` makes them
+together, all or none:
+
+```
+calutil edit --match-notes "Trip 2026" --all --tz Pacific/Auckland --keep-time --save
+calutil edit --match concert --match-calendar Home --all --add-alarm 1d --save
+```
+
 ## Templates
 
 A JSON file at `~/.config/calutil/templates.json` (or `$XDG_CONFIG_HOME/calutil/templates.json`

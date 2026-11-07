@@ -115,6 +115,7 @@ public enum Completion {
         ],
         "edit": selection + fields + [
             Option(name: "--keep-time", kind: .flag, help: "with --timezone: keep the moment, not the clock time"),
+            Option(name: "--all", kind: .flag, help: "change every matching event"),
             Option(name: "--save", kind: .flag, help: "make the change"),
             Option(name: "--dry-run", kind: .flag, help: "only show the change (the default)"),
             help,
